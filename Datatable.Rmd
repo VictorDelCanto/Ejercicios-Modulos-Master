@@ -1,0 +1,775 @@
+---
+title: "EJERCICIOS"
+author: "Victor M. del Canto"
+date: "25 de abril de 2018"
+output: slidy_presentation
+---
+
+```{r setup, include=FALSE,results='hide'}
+library(knitr)
+library(kableExtra)
+knitr::opts_chunk$set(echo = TRUE,fig.width = 10,fig.height = 8,fig.align="center" )
+options(knitr.table.format = "html")
+```
+
+# **REALIZACION EJERCICIOS CON DATATABLE**
+## Ejercicios (utilizando movies)
+ Instalamos el paquete - La versión disponible es la 1.10.4
+
+``` {r eval=FALSE}
+install.packages("data.table")
+library(data.table)
+```
+ Cargamos el paquete
+``` {r echo=FALSE}
+library(data.table)
+```
+Vamos a instalar también el paquete `ggplot2movies`
+
+```{r eval=FALSE}
+install.packages("ggplot2movies")
+library(ggplot2movies)
+```
+
+Cargamos el paquete
+```{r echo=FALSE}
+library(ggplot2movies)
+```
+
+Al cargar el paquete ggplot2movies automáticamente tendremos disponible
+el conjunto `movies`
+
+
+Cargamos el contenido de `movies` en un datatable `movDT`
+``` {r}
+movDT <- as.data.table(movies)
+names(movDT)
+```
+Preparo los distintos contenedores que usaré en cada ejercicio
+```{r}
+visualiza1=data.frame()
+visualiza2=list()
+visualiza3=data.frame()
+visualiza4=list()
+visualiza5=data.frame()
+visualiza6=list()
+nombres=c()
+```
+ * Para poder observar en una grafica de manera conjunta todos los generos creo una lista de 7 dataframes asociado a cada genero y cada uno de ellos de dos variables: año y la variable solicitada (presupuesto,duracion o rating)
+* En DataTable asumo que si una pelicula esta incluida en varios generos se puede catalogar al mismo tiempo en todos ellos y por lo tanto calcular los datos que necesite en todos los generos a los que pertenezca
+* Para todos los puntos es comun:
+    + Las columnas de generos son desde la 18 a 24, luego el bucle estara entre estos valores
+    +  Obtenemos el nombre de la columna a analizar en `nomcol`
+    +  Guardo los nombres en un vector para la visualizacion en `nombres`
+    + En el datatable `movDT`, en la parte de i seleccionamos como si fuera un *WHERE* de *SQL* las filas   donde la columna es igual a 1 por lo que pertenece a ese genero
+    + Y en la parte j como un *SELECT* la variable que buscamos(duracion,presupuesto o rating)
+
+***
+
+### 1. Ver duraciones por tipo de pelicula  - Visualizándolo
+
+vacio el vector
+```{r eval=FALSE}
+nombres=c() 
+```
+
+*  No es necesario usar *GROUP BY* (by)
+*  Se guarda en un dataframe `visualiza1` para la visualizacion
+```{r eval=FALSE}
+for (p in 18:24){ 
+  nomcol<- (colnames(movDT[,p,with=FALSE]))
+  nombres<-c(nombres,nomcol) 
+  visualiza1[p-17,1]<-nomcol
+  visualiza1[p-17,2]<-movDT[movDT[[nomcol]]==1,.(Total_Duracion=mean(as.numeric(length)))]
+}
+```
+Y creamos el grafico. Queda mas accesible como un grafico de barras
+
+``` {r eval=FALSE}
+barplot(visualiza1[,2],main= "Duracion Media por tipo de pelicula",
+          ylab="Duracion",col=1:7,names.arg = visualiza1[,1],ylim
+          =c(0,1.2*max(visualiza1[,2])))
+```
+
+```{r echo=FALSE}
+nombres=c() 
+for (p in 18:24){ 
+  nomcol<- (colnames(movDT[,p,with=FALSE]))
+  nombres<-c(nombres,nomcol) 
+  visualiza1[p-17,1]<-nomcol
+  visualiza1[p-17,2]<-movDT[movDT[[nomcol]]==1,.(Total_Duracion=mean(as.numeric(length)))]
+}
+```
+
+
+``` {r echo=FALSE}
+  barplot(visualiza1[,2],main= "Duracion Media por tipo de pelicula",          ylab="Duracion",col=1:7,names.arg = visualiza1[,1],ylim          =c(0,1.2*max(visualiza1[,2])))
+```
+
+***
+### 2. Ver duraciones por tipo de película y año - Visualizándolo
+
+vacio el vector
+```{r eval=FALSE}
+nombres=c() 
+```
+* Tomamos el mismo bucle que en el punto anterior pero ahora debemos agrupar los resultados por año  por lo que le añadimos una clausula by
+
+* Debemos agrupar (*GROUP BY*) los resultados por año  por lo que le añadimos una clausula by
+```{r eval=FALSE}
+for (p in 18:24){ 
+  nomcol<- (colnames(movDT[,p,with=FALSE]))
+  nombres<-c(nombres,nomcol) 
+  visualiza2[[nomcol]]<-movDT[movDT[[nomcol]]==1,.(Total_Duracion=mean(as.numeric(length))),
+                              by = year][order(year,na.last = TRUE)]
+}
+```
+
+Y creamos el grafico.
+```{r eval=FALSE} 
+plot(visualiza2[[1]][[1]],visualiza2[[1]][[2]],main= "Duracion Media",
+     xlab="Años",ylab="Duracion",type="l",col=1)
+for (q in 2:7){
+  lines(visualiza2[[q]][[1]],visualiza2[[q]][[2]],col=q)
+}
+legend("topleft",legend=nombres,lty=1,bty='n',lwd=3,col=1:7,cex = 0.65)
+```
+
+```{r echo=FALSE}
+nombres=c() 
+for (p in 18:24){ 
+  nomcol<- (colnames(movDT[,p,with=FALSE])) 
+  nombres<-c(nombres,nomcol) 
+  visualiza2[[nomcol]]<-movDT[movDT[[nomcol]]==1,.(Total_Duracion=mean(as.numeric(length))),by = year][order(year,na.last = TRUE)]
+}
+
+plot(visualiza2[[1]][[1]],visualiza2[[1]][[2]],main= "Duracion Media",xlab="Años",ylab="Duracion",type="l",col=1)
+for (q in 2:7){
+  lines(visualiza2[[q]][[1]],visualiza2[[q]][[2]],col=q)
+}
+legend("topleft",legend=nombres,lty=1,bty="n",lwd=3,col=1:7,cex = 0.65)
+```
+
+***
+
+### 3. Ver presupuestos por tipo de pelicula  - Visualizándolo
+
+Hacemos un bucle parecido al punto 1 pero cambiando duracion por presupuesto
+vacio el vector
+```{r eval=FALSE}
+nombres=c() 
+```
+
+* No es necesario usar *GROUP BY* (by)
+* Se guarda en un dataframe `visualiza3` para la visualizacion
+```{r eval=FALSE}
+for (p in 18:24){ 
+  nomcol<- (colnames(movDT[,p,with=FALSE]))
+  nombres<-c(nombres,nomcol) 
+  visualiza3[p-17,1]<-nomcol
+  visualiza3[p-17,2]<-movDT[movDT[[nomcol]]==1,.(Presupuesto=mean(as.numeric(budget),na.rm = TRUE))]
+}
+```
+Y creamos el grafico. Queda mas accesible como un grafico de barras
+
+``` {r eval=FALSE}
+barplot(visualiza3[,2],main= "Presupuesto Medio por tipo de pelicula",
+          ylab="Presupuesto",col=1:7,names.arg = visualiza3[,1],
+          ylim=c(0,1.2*max(visualiza3[,2])))
+```
+
+```{r echo=FALSE}
+nombres=c() 
+for (p in 18:24){ 
+  nomcol<- (colnames(movDT[,p,with=FALSE]))
+  nombres<-c(nombres,nomcol) 
+  visualiza3[p-17,1]<-nomcol
+  visualiza3[p-17,2]<-movDT[movDT[[nomcol]]==1,.(Presupuesto=mean(as.numeric(budget),na.rm = TRUE))]
+}
+```
+
+
+``` {r echo=FALSE}
+barplot(visualiza3[,2],main= "Presupuesto Medio por tipo de pelicula ",ylab="Presupuesto",col=1:7,names.arg = visualiza3[,1],ylim=c(0,1.2*max(visualiza3[,2])))
+```
+
+***
+
+
+### 4. Ver presupuestos por tipo de película y año - Visualizándolo
+
+Hacemos un bucle parecido al punto 1 pero cambiando duracion por presupuesto
+vacio el vector
+```{r eval=FALSE}
+nombres=c() 
+```
+
+Debemos agrupar (*GROUP BY*) los resultados por año  por lo que le añadimos una clausula by
+```{r eval=FALSE}
+for (p in 18:24){ 
+  nomcol<- (colnames(movDT[,p,with=FALSE]))
+  nombres<-c(nombres,nomcol) 
+  visualiza4[[nomcol]]<-movDT[movDT[[nomcol]]==1,.(Presupuesto=mean(as.numeric(budget),na.rm = TRUE)),
+                              by = year][order(year,na.last = TRUE)]
+}
+```
+
+Y creamos el grafico.
+```{r eval=FALSE} 
+plot(visualiza4[[1]][[1]],visualiza4[1]][[2]],main= "Presupuestos Medios",
+xlab="Años",ylab="Presupuesto",type="l",col=1)
+for (q in 2:7){
+  lines(visualiza4[[q]][[1]],visualiza4[[q]][[2]],col=q)
+}
+legend("topleft",legend=nombres,lty=1,bty='n',lwd=3,col=1:7,cex = 0.65)
+```
+
+```{r echo=FALSE}
+nombres=c() 
+for (p in 18:24){ 
+  nomcol<- (colnames(movDT[,p,with=FALSE])) 
+  nombres<-c(nombres,nomcol) 
+  visualiza4[[nomcol]]<-movDT[movDT[[nomcol]]==1,.(Presupuesto=mean(as.numeric(budget),na.rm = TRUE)),by = year][order(year,na.last = TRUE)]
+}
+
+plot(visualiza4[[1]][[1]],visualiza4[[1]][[2]],main= "Presupuestos Medios",xlab="Años",ylab="Presupuesto",type="l",col=1)
+for (q in 2:7){
+  lines(visualiza4[[q]][[1]],visualiza4[[q]][[2]],col=q)
+}
+legend("topleft",legend=nombres,lty=1,bty="n",lwd=3,col=1:7,cex = 0.65)
+```
+
+***
+
+### 5. Ver los ratings medios por tipo de película - Visualizándolo
+
+Hacemos un bucle parecido al punto 1 pero cambiando duracion por rating medio
+vacio el vector
+```{r eval=FALSE}
+nombres=c() 
+```
+
+* No es necesario usar *GROUP BY* (by)
+* Se guarda en un dataframe `visualiza5` para la visualizacion
+* Redondearemos los decimales a dos digitos
+
+```{r eval=FALSE}
+for (p in 18:24){ 
+  nomcol<- (colnames(movDT[,p,with=FALSE]))
+  nombres<-c(nombres,nomcol) 
+  visualiza5[p-17,1]<-nomcol
+  visualiza5[p-17,2]<-movDT[movDT[[nomcol]]==1,.(Rating=round(mean(rating),2))]
+}
+```
+
+Y creamos el grafico. Queda mas accesible como un grafico de barras
+
+``` {r eval=FALSE}
+barplot(visualiza5[,2],main= "Rating Medio por tipo de pelicula",
+          ylab="Rating",col=1:7,names.arg = visualiza5[,1],
+          ylim=c(0,1.2*max(visualiza5[,2])))
+```
+
+```{r echo=FALSE}
+nombres=c() 
+for (p in 18:24){ 
+  nomcol<- (colnames(movDT[,p,with=FALSE]))
+  nombres<-c(nombres,nomcol) 
+  visualiza5[p-17,1]<-nomcol
+  visualiza5[p-17,2]<-movDT[movDT[[nomcol]]==1,.(Rating=round(mean(rating),2))]
+}
+barplot(visualiza5[,2],main= "Rating Medio por tipo de pelicula ",ylab="Rating",col=1:7,names.arg = visualiza5[,1],ylim=c(0,1.2*max(visualiza5[,2])))
+```
+
+***
+
+### 6. Ver los ratings medios por tipo de película y año - Visualizándolo
+
+Hacemos un bucle parecido al punto 1 pero cambiando duracion por presupuesto
+vacio el vector
+```{r eval=FALSE}
+nombres=c() 
+```
+
+* Debemos agrupar (*GROUP BY*) los resultados por año  por lo que le añadimos una clausula by
+* Redondearemos los decimales a dos digitos
+
+```{r eval=FALSE}
+for (p in 18:24){ 
+  nomcol<- (colnames(movDT[,p,with=FALSE]))
+  nombres<-c(nombres,nomcol) 
+  visualiza6[[nomcol]]<-movDT[movDT[[nomcol]]==1,.(Rating=round(mean(rating),2)),
+                              by = year][order(year,na.last = TRUE)]
+}
+```
+
+Y creamos el grafico.
+```{r eval=FALSE} 
+plot(visualiza6[[1]][[1]],visualiza6[1]][[2]],main= "Ratings Medios",
+xlab="Años",ylab="Rating",type="l",col=1)
+for (q in 2:7){
+  lines(visualiza6[[q]][[1]],visualiza6[[q]][[2]],col=q)
+}
+legend("topleft",legend=nombres,lty=1,bty='n',lwd=3,col=1:7,cex = 0.65)
+```
+
+```{r echo=FALSE}
+nombres=c() 
+for (p in 18:24){ 
+  nomcol<- (colnames(movDT[,p,with=FALSE])) 
+  nombres<-c(nombres,nomcol) 
+  visualiza6[[nomcol]]<-movDT[movDT[[nomcol]]==1,.(Rating=round(mean(rating),2)),by = year][order(year,na.last = TRUE)]
+}
+
+plot(visualiza6[[1]][[1]],visualiza6[[1]][[2]],main= "Ratings Medios",xlab="Años",ylab="Rating",type="l",col=1)
+for (q in 2:7){
+  lines(visualiza6[[q]][[1]],visualiza6[[q]][[2]],col=q)
+}
+legend("topleft",legend=nombres,lty=1,bty="n",lwd=3,col=1:7,cex = 0.65)
+```
+
+***
+
+## Ejercicios (utilizando nycflights13)
+
+Cargamos el paquete `nycflights13`
+```{r}
+library(nycflights13)
+```
+cargamos el conjunto `flights` en un datable `vuelo`
+```{r}
+vuelo<-as.data.table(flights)
+```
+
+### 1. Estudiar qué aeropuertos de órigen son los que más retrasos acumulan.
+```{r}
+vuelo[,.(Total_Retrasos=sum(dep_delay,na.rm = TRUE)),by=origin][order(-Total_Retrasos,na.last = TRUE)]
+```
+### 2. Y las aerolíneas que más retrasos acumulan en cantidad y en valor medio del retraso.
+
+#### Retrasos en cantidad ordenados
+```{r}
+vuelo[,.(Retrasos=sum(dep_delay,arr_delay,na.rm = TRUE)),by=carrier][order(-Retrasos,na.last = TRUE)]
+```
+#### Valor medio del retraso ordenado y redondeado
+```{r}
+vuelo[,.(Media_Retrasos=round(mean((arr_delay+dep_delay),na.rm = TRUE),2)),
+      by = carrier][order(-Media_Retrasos,na.last = TRUE)]
+```
+
+***
+# **REALIZACION EJERCICIOS CON DPLYR**
+## Ejercicios (utilizando movies)
+* Instalamos el paquete version 0.7.4
+```{r eval=FALSE}
+install.packages("dplyr")
+library(dplyr)
+```
+* Y cargamos
+```{r echo=FALSE,message=FALSE}
+library(dplyr)
+```
+* Instalamos el paquete ggplot para realizar las graficas
+ Con un breve aprendizaje para realizar las graficas y superar las dificultades planteadas en la realizacion anterior (mediante `data.table`)
+```{r eval =FALSE}
+install.packages("ggplot2")
+library(ggplot2)
+```
+* Y cargamos
+````{r echo=FALSE}
+library(ggplot2)
+```
+* Vamos a instalar también el paquete "ggplot2movies".
+
+```{r eval=FALSE}
+install.packages("ggplot2movies")
+library(ggplot2movies)
+```
+
+* Cargamos el paquete
+```{r echo=FALSE}
+library(ggplot2movies)
+```
+
+* Al cargar el paquete ggplot2movies automáticamente tendremos disponible
+el conjunto "movies".
+```{r }
+movie<-movies
+```
+ * En este caso y por eficiencia vamos a descartar todas aquellas peliculas 
+ que pertenezcan a mas de un genero aunque se pierda informacion
+ * Creamos una columna auxiliar donde sumamos los valores de las columnas 
+ de genero
+```{r }
+movie<-mutate(movie,genero=Action+Animation+Comedy+Drama+Documentary+Romance+Short)
+```
+*  Se eliminan todas las filas cuyo genero sea diferente a 1, 
+ bien porque no tenga, o porque tenga mas de uno
+```{r}
+movie2<-filter(movie,genero==1)
+```
+*  Se crea otra columna donde se agrupan todos los generos
+``` {r}
+movie3<-mutate(movie2,gen=case_when(
+  Action==1~"Action",
+  Animation==1~"Animation",
+  Comedy==1~"Comedy",
+  Drama==1~"Drama",
+  Documentary==1~"Documentary",
+  Romance==1~"Romance",
+  Short==1~"Short"
+))
+```
+*  Ya tenemos los datos preparados
+*  El codigo sera ahora mucho mas sencillo y legible
+
+***
+
+### 1. Ver duraciones por tipo de pelicula  - Visualizándolo
+
+``` {r eval=FALSE}
+punto1<-movie3%>%group_by(gen)%>%summarise(Duracion=mean(length))
+
+barplot(punto1$Duracion,col=1:7,main= "Duracion Media por tipo de pelicula ",
+          ylab="Duracion",names.arg = punto1$gen,
+          ylim =c(0,1.2*max(punto1$Duracion)))
+``` 
+``` {r echo=FALSE}
+punto1<-movie3%>%group_by(gen)%>%summarise(Duracion=mean(length))
+
+barplot(punto1$Duracion,col=1:7,main= "Duracion Media por tipo de pelicula ",ylab="Duracion",names.arg = punto1$gen,ylim =c(0,1.2*max(punto1$Duracion)))
+``` 
+
+***
+
+### 2. Ver duraciones por tipo de pelÍcula y año - Visualizándolo
+``` {r}
+punto2<-movie3%>%group_by(gen,year)%>%summarise(Duracion=mean(length))
+ggplot(data=punto2,aes(x=year,y=Duracion,color=gen))+geom_line()+
+  facet_grid(~gen)+ggtitle("Duracion Media ")+labs(x="AÑOS")
+``` 
+
+***
+
+### 3. Ver presupuestos por tipo de pelicula  - Visualizándolo
+``` {r eval=FALSE}
+punto3<-movie3%>%group_by(gen)%>%summarise(Presupuesto=mean(budget,na.rm = TRUE))
+
+barplot(punto3$Presupuesto,col=1:7,main= "Presupuesto Medio por tipo de pelicula ",
+          ylab="Dinero",names.arg = punto3$gen,
+          ylim =c(0,1.2*max(punto3$Presupuesto)))
+``` 
+``` {r echo=FALSE}
+punto3<-movie3%>%group_by(gen)%>%summarise(Presupuesto=mean(budget,na.rm = TRUE))
+
+barplot(punto3$Presupuesto,col=1:7,main= "Presupuesto Medio por tipo de pelicula ",ylab="Dinero",names.arg = punto3$gen,ylim =c(0,1.2*max(punto3$Presupuesto)))
+``` 
+
+***
+
+### 4. Ver presupuestos por tipo de pelÍcula y año - Visualizándolo
+``` {r warning=FALSE}
+punto4<-movie3%>%group_by(gen,year)%>%summarise(Duracion=mean(budget,na.rm = TRUE))
+ggplot(data=punto4,aes(x=year,y=Duracion,color=gen))+geom_line()+
+  facet_grid(~gen)+ggtitle("Presupuesto Medio ")+labs(x="AÑOS")
+``` 
+
+***
+
+### 5. Ver los ratings medios por tipo de pelÍcula - Visualizándolo
+``` {r eval=FALSE}
+punto5<-movie3%>%group_by(gen)%>%summarise(Rating=round(mean(rating),2))
+
+barplot(punto5$Rating,col=1:7,main= "Rating Medio por tipo de pelicula ",
+          ylab="Puntuacion",names.arg = punto5$gen,
+          ylim =c(0,1.2*max(punto5$Rating)))
+``` 
+``` {r echo=FALSE}
+punto5<-movie3%>%group_by(gen)%>%summarise(Rating=round(mean(rating),2))
+
+barplot(punto5$Rating,col=1:7,main= "Rating Medio por tipo de pelicula ",ylab="Puntuacion",names.arg = punto5$gen,ylim =c(0,1.2*max(punto5$Rating)))
+```
+
+***
+
+### 6. Ver los ratings medios por tipo de pelÍcula y año - Visualizándolo
+``` {r}
+punto6<-movie3%>%group_by(gen,year)%>%summarise(Duracion=mean(rating))
+ggplot(data=punto6,aes(x=year,y=Duracion,color=gen))+geom_line()+
+  facet_wrap(~gen)+ggtitle("Rating Medio ")+labs(x="AÑOS")
+``` 
+***
+
+## Ejercicios (utilizando nycflights13)
+
+* Cargamos el paquete `nycflights13`
+```{r}
+library(nycflights13)
+```
+* cargamos el conjunto `flights` en `vuelo1`
+```{r}
+vuelo1<-flights
+```
+
+
+### 1. Estudiar qué aeropuertos de órigen son los que más retrasos acumulan.
+```{r}
+vuelo1%>%group_by(origin)%>%summarise(Total_Retrasos=sum(dep_delay,na.rm = TRUE))
+```
+### 2. Y las aerolíneas que más retrasos acumulan en cantidad y en valor medio del retraso.
+
+#### Retrasos en cantidad ordenados
+```{#r}
+vuelo1%>%group_by(carrier)%>%summarise(Retrasos=sum(dep_delay,arr_delay,na.rm = TRUE))%>%
+  arrange(desc(Retrasos))
+```
+#### Valor medio del retraso ordenado y redondeado
+```{r}
+vuelo1%>%group_by(carrier)%>%summarise(Media_Retrasos=round(mean((arr_delay+dep_delay),na.rm = TRUE),2))%>%
+  arrange(desc(Media_Retrasos))
+```
+***
+
+# **COMPARATIVA RENDIMIENTO DATA.TABLE VS DPLYR** 
+Con los ejercicios NYCFLIGHTS13
+
+## 1. Estudiar qué aeropuertos de órigen son los que más retrasos acumulan.
+```{r eval=FALSE}
+print("DATA.TABLE")
+system.time(vuelo[,.(Total_Retrasos=sum(dep_delay,na.rm = TRUE)),by=origin]
+            [order(-Total_Retrasos,na.last = TRUE)])
+print("DPLYR")
+system.time(vuelo1%>%group_by(origin)%>%summarise(Total_Retrasos=sum(dep_delay,na.rm = TRUE)))
+```
+```{r echo=FALSE,collapse=TRUE}
+print("DATA.TABLE")
+system.time(vuelo[,.(Total_Retrasos=sum(dep_delay,na.rm = TRUE)),by=origin][order(-Total_Retrasos,na.last = TRUE)])
+print("DPLYR")
+system.time(vuelo1%>%group_by(origin)%>%summarise(Total_Retrasos=sum(dep_delay,na.rm = TRUE)))
+```
+## 2. Y las aerolíneas que más retrasos acumulan en cantidad y en valor medio del retraso.
+
+###Retrasos en cantidad ordenados
+```{r eval=FALSE}
+print("DATA.TABLE")
+system.time(vuelo[,.(Retrasos=sum(dep_delay,arr_delay,na.rm = TRUE)),by=carrier]
+            [order(-Retrasos,na.last = TRUE)])
+print("DPLYR")
+system.time(vuelo1%>%group_by(carrier)%>%summarise(Retrasos=sum(dep_delay,arr_delay,na.rm = TRUE))%>%arrange(desc(Retrasos)))
+```
+```{r echo=FALSE,collapse=TRUE}
+print("DATA.TABLE")
+system.time(vuelo[,.(Retrasos=sum(dep_delay,arr_delay,na.rm = TRUE)),by=carrier][order(-Retrasos,na.last = TRUE)])
+print("DPLYR")
+system.time(vuelo1%>%group_by(carrier)%>%summarise(Retrasos=sum(dep_delay,arr_delay,na.rm = TRUE))%>%arrange(desc(Retrasos)))
+```
+###Valor medio del retraso ordenado y redondeado
+```{r eval=FALSE}
+print("DATA.TABLE")
+system.time(vuelo[,.(Media_Retrasos=round(mean((arr_delay+dep_delay),na.rm = TRUE),2)),by = carrier]
+            [order(-Media_Retrasos,na.last = TRUE)])
+print("DPLYR")
+system.time(vuelo1%>%group_by(carrier)%>%summarise(Media_Retrasos=round(mean((arr_delay+dep_delay),na.rm = TRUE),2))%>%arrange(desc(Media_Retrasos)))
+```
+```{r echo=FALSE,collapse=TRUE}
+print("DATA.TABLE")
+system.time(vuelo[,.(Media_Retrasos=round(mean((arr_delay+dep_delay),na.rm = TRUE),2)),by = carrier][order(-Media_Retrasos,na.last = TRUE)])
+print("DPLYR")
+system.time(vuelo1%>%group_by(carrier)%>%summarise(Media_Retrasos=round(mean((arr_delay+dep_delay),na.rm = TRUE),2))%>%arrange(desc(Media_Retrasos)))
+```
+
+***
+
+# **REALIZACION EJERCICIOS CON TIDYR**
+## Ejercicios (utilizando movies)
+* Instalamos el paquete tidyr version 0.8.0
+```{r eval=FALSE}
+install.packages("tidyr")
+library(tidyr)
+```
+* Y cargamos
+```{r echo=FALSE,message=FALSE}
+library(tidyr)
+```
+* Instalamos el paquete dplyr version 0.7.4
+```{r eval=FALSE}
+install.packages("dplyr")
+library(dplyr)
+```
+* Y cargamos
+```{r echo=FALSE,message=FALSE}
+library(dplyr)
+```
+* Instalamos el paquete ggplot para realizar las graficas
+```{r eval =FALSE}
+install.packages("ggplot2")
+library(ggplot2)
+```
+* Y cargamos
+````{r echo=FALSE}
+library(ggplot2)
+```
+* Vamos a instalar también el paquete "ggplot2movies".
+```{r eval=FALSE}
+install.packages("ggplot2movies")
+library(ggplot2movies)
+```
+* Cargamos el paquete
+```{r echo=FALSE}
+library(ggplot2movies)
+```
+* Al cargar el paquete ggplot2movies automáticamente tendremos disponible
+el conjunto "movies".
+```{r }
+movTy<-movies
+```
+ * En este caso y por eficiencia vamos a descartar todas aquellas peliculas 
+ que pertenezcan a mas de un genero aunque se pierda informacion
+ * Creamos una columna auxiliar donde sumamos los valores de las columnas 
+ de genero
+```{r }
+movTy1<-mutate(movTy,genero=Action+Animation+Comedy+Drama+Documentary+Romance+Short)
+```
+*  Se eliminan todas las filas cuyo genero sea diferente a 1, 
+ bien porque no tenga, o porque tenga mas de uno
+```{r}
+movTy2<-filter(movTy1,genero==1)
+```
+*  Realizo una transformacion a lo largo para unificar las columnas de genero en una sola
+``` {r}
+movTy3<-movTy2%>%gather(key="genero",value=valor,Action,Animation,Comedy,Drama,Documentary,Romance,Short)
+
+movTy4<-movTy3%>%filter(valor==1)
+```
+* Elimino la columna auxiliar y reordeno
+```{r}
+movTy4<-movTy4%>%arrange(title,year)%>%select(-(valor))
+```
+*  Ya tenemos los datos preparados
+
+***
+
+### 1. Ver duraciones por tipo de pelicula  - Visualizándolo
+```{r}
+punto1<-movTy4%>%group_by(genero)%>%summarise(Duracion=mean(length))
+ggplot(data=punto1,aes(x=genero,y=Duracion,fill=genero,color=genero))+
+  geom_bar(stat="identity")+ggtitle("Duracion Media ")
+```
+
+***
+
+### 2. Ver duraciones por tipo de película y año - Visualizándolo
+```{r}
+punto2<-movTy4%>%group_by(genero,year)%>%summarise(Duracion=mean(length))
+ggplot(data=punto2,aes(x=year,y=Duracion,color=genero))+geom_line()+
+  facet_grid(~genero)+ggtitle("Duracion Media ")+labs(x="AÑOS")
+```
+
+***
+
+### 3. Ver presupuestos por tipo de pelicula  - Visualizándolo
+```{r}
+punto3<-movTy4%>%group_by(genero)%>%summarise(Presupuesto=mean(budget,na.rm = TRUE))
+ggplot(data=punto3,aes(x=genero,y=Presupuesto,fill=genero,color=genero))+
+  geom_bar(stat="identity")+ggtitle("Presupuesto Medio ")
+```
+
+***
+
+### 4. Ver presupuestos por tipo de película y año - Visualizándolo
+```{r warning=FALSE}
+punto4<-movTy4%>%group_by(genero,year)%>%summarise(Presupuesto=mean(budget,na.rm = TRUE))
+ggplot(data=punto4,aes(x=year,y=Presupuesto,color=genero))+geom_line()+
+  facet_grid(~genero)+ggtitle("Presupuesto Medio ")+labs(x="AÑOS")
+```
+
+***
+
+### 5. Ver los ratings medios por tipo de película - Visualizándolo
+```{r}
+punto5<-movTy4%>%group_by(genero)%>%summarise(Rating=round(mean(rating),2))
+ggplot(data=punto5,aes(x=genero,y=Rating,fill=genero,color=genero))+
+  geom_bar(stat="identity")+ggtitle("Rating Medio ")
+```
+
+***
+
+### 6. Ver los ratings medios por tipo de película y año - Visualizándolo
+```{r}
+punto6<-movTy4%>%group_by(genero,year)%>%summarise(Rating=round(mean(rating),2))
+ggplot(data=punto6,aes(x=year,y=Rating,color=genero))+geom_line()+
+  facet_grid(~genero)+ggtitle("Rating Medio ")+labs(x="AÑOS")
+```
+
+
+
+***
+
+# Comentario a las comparativas entre DATA.TABLE Vs DPLYR
+Sobre el total del archivo movies usado en los ejercicios anteriores hay que valorar el hecho de que mientras en Data.Table se ha usado el total de registros sin entrar a consideracion a que genero pertenecian aquellos que eran de mas de uno (o ninguno),tanto en Dplyr como en Tidyr solo hemos utilizado los que pertenecia exclusivamente a uno.
+Esto lo he hecho asi por desconocimiento del procedimiento adecuado y porque he ido avanzando cronologicamente en la resoludcion de los ejercicios segun iba estudiando los temas.Cuando se propuso en la comunidad discriminar solo aquellas peliculas que pertenecieran a un solo genero, ya tenia la parte de Data.Table realizada
+
+Ahora hago una valoracion de lo que supone para la comparativa
+
+Pongo en un conjunto separado por generos las variables pedidas mas el numero de registros
+Creo una nueva columna donde sumo el total de generos y lo ordeno por esta
+
+```{r}
+
+result1<-(movDT[,.(duracion=round(mean(length),2),presupuesto=(mean(as.numeric(budget),na.rm=TRUE)),
+                   ratio=round(mean(rating),2),total=length(rating)),
+                by = .(Action,Animation,Comedy,Drama,Documentary,Romance,Short)])
+result2<-result1%>%mutate(genero=Action+Animation+Comedy+
+                  Drama+Documentary+Romance+Short)%>%arrange(genero)
+result3<-result2%>%select(-(duracion),-(presupuesto),-(ratio))
+kable(result3)%>%kable_styling(bootstrap_options=c("stripped","condensed"),font_size=12)
+```
+ 
+ Lo primero que salta a la vista es que hay 12786 (21.7%) de peliculas que no tienen genero. Pero esto no nos afecta en principio puesto que las hemos descartado en ambos estudios
+ Y si quitamos las que tienen genero unico que estan incluidas en ambos estudios y descartamos de las que tengan varios generos aquellas cuyo numero sea menor de 100 porque no son significativas nos queda la siguiente tabla
+ 
+```{r}
+result4<-result2%>%filter(total>100)%>%filter(genero>1)
+result5<-result4%>%arrange(-Short,-Action,-Animation,-Comedy,-Drama,-Documentary,-Romance)
+result5%>%kable("html")%>%kable_styling(bootstrap_options=c("bordered",
+                                                            "hover","condensed","active"),font_size=12)
+```
+
+***
+
+```{r echo=FALSE}
+plto<-as.data.frame(punto1%>%mutate(Datos="Restringido"))
+plto[8:14,]<-visualiza1%>%mutate(Datos="Total")
+ggplot(data=plto,aes(x=plto$gen,y=plto$Duracion,fill=plto$gen,color=plto$Datos))+  geom_bar(stat="identity",position = "dodge")+ggtitle("Duracion Media ")+labs(x="Genero",y="Duracion",fill="Genero",color="Datos")
+
+```
+
+ Vemos visualmente que existe una diferencia apreciable sobre todo en tres generos
+
+1. Animation. El numero de peliculas que no solo son de Animation y tambien pertenecen a Short son 3001 peliculas con un duracion media de 7.72 minutos
+Sobre un total de 308 peliculas que pertenecen solo a Animation con una duracion media de 80.29. La evidente desproporcion nos da el motivo del descuadre visto
+    
+2. Comedy El numero de peliculas que no solo son de Comedy se desglosan en:
+  + Pertenecen tambien a Short. 3712 peliculas con una duracion media de 11.04 minutos
+  + Pertenecen a otros generos No Short. 4832 peliculas con una duracion media de 97.73 minutos
+  Sobre un total de peliculas que pertenecen solo a Comedy 8237 peliculas con una duracion media de 91.53 minutos
+  Existe una importante cantidad de peliculas de duracion pequeña que explica la diferencia en las barras de la estadistica pero se compensa en parte con las de mayor duracion 
+3. Documentary El numero de peliculas que no son solo de Documentary y tambien pertenecen a Short es de 795 peliculas con una duracion media de 20.72 minutos
+Sobre un total de peliculas que pertenecen solo a Documentary de 2384 con una duracion media de 87.55 minutos. Esta cantidad apreciable de peliculas de duracion corta son las que explican las diferencias de barras
+  
+  
+``` {r echo=FALSE}
+plto1<-as.data.frame(punto3%>%mutate(Datos="Restringido"))
+plto1[8:14,]<-visualiza3%>%mutate(Datos="Total")
+ggplot(data=plto1,aes(x=plto1$gen,y=plto1$Presupuesto,fill=plto1$gen,color=plto1$Datos))+  geom_bar(stat="identity",position = "dodge")+ggtitle("Presupuesto Medio ")+labs(x="Genero",y="Presupuesto",fill="Genero",color="Datos")
+```
+
+``` {r echo=FALSE}
+plto2<-as.data.frame(punto5%>%mutate(Datos="Restringido"))
+plto2[8:14,]<-visualiza5%>%mutate(Datos="Total")
+ggplot(data=plto2,aes(x=plto2$gen,y=plto2$Rating,fill=plto2$gen,color=plto2$Datos))+  geom_bar(stat="identity",position = "dodge")+ggtitle("Rating Medio ")+labs(x="Genero",y="Rating",fill="Genero",color="Datos")
+```
+
+No se aprecian diferencias significativas en cuanto a las otras dos varibles estudiadas, presupuesto y rating, exceptuando el presupuesto en Romance que se explica porque las peliculas con genero unico=Romance son 537 y las que comparten genero con otros son 3854 con mayor presupuesto medio.
+
+Podemos concluir que lo que si afecta a la primera variable es el establecimiento de un genero que se basa en la duracion como es Short, y en las otras variables existen cambios no excesivos por lo que lo ideal seria considerar Short no como un genero sino como un atributo y no considerarlo en el estudio, y tomar el conjunto de datos en total incluso con peliculas que pertenecen a varios generos
