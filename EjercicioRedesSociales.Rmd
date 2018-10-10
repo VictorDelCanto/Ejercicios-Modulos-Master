@@ -1,0 +1,595 @@
+---
+title: "REDES SOCIALES"
+author: "Victor M. del Canto"
+date: "21 de julio de 2018"
+output: 
+  slidy_presentation:
+    highlight: pygments
+    font_adjustment: -1
+    toc: TRUE
+    toc_float: TRUE
+urlcolor: blue
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(echo = TRUE,fig.width = 10,fig.height = 8,fig.align="center" )
+options(knitr.table.format = "html")
+
+```
+
+#Acceder el API de una red social {.smaller}
+
+En este ejercio pretendo acceder a la `Wikipedia`.
+
+Aunque no es una red social como facilmente reconocemos otras hoy en dia, si tiene una cierta similitud en cuanto a la colaboracion de muchas personas de diversos ambitos y paises en su mantenimiento y actividad 
+
+Empiezo por cargar al principio los paquetes que usare.
+
+Se requiere instalar los que no se tengan
+
+```{r results='hide',message=FALSE,warning=FALSE}
+library(dplyr)
+library(tidyr)
+library(WikipediR)
+library(WikipediaR)
+library(jsonlite)
+library(tm)
+library(wordcloud)
+library(ggplot2)
+```
+
+
+
+Como uno de mis hobbys es la historia he escogido una pagina extensa llamada "Historia de España"
+
+Vamos a acceder a su contenido por dos caminos. 
+
+ * Para acceder al contenido de una pagina es conveniente leer esta pregunta respondida en StackOverflow donde se explica como obtener en formato `JSON` el contenido de una pagina concreta:
+
+[https://stackoverflow.co.....](https://stackoverflow.com/questions/31462854/how-to-get-a-page-actual-content-using-page-id-in-wikipedia-api)
+
+De aqui podemos obtener el contenido de la pagina en un archivo `JSON`
+
+
+```{r }
+#Descargamos lista     
+fich<-fromJSON("https://es.wikipedia.org/w/api.php?action=parse&prop=text&page=Historia%20de%20Espa%C3%B1a&format=json")
+#Y se extrae texto
+text<-fich$parse$text$`*`
+
+```
+
+
+ * La segunda forma es mediante el paquete `WikipediR` y su funcion `page_content()`
+ 
+```{r}
+#Descargamos lista 
+HE_content <- page_content("es","wikipedia", page_name = "Historia de España")
+#Y se extrae texto
+datox<-HE_content$parse$text$`*`
+```
+
+#Transformacion,limpieza y mineria {.smaller}
+
+Con cualquiera de las dos formas de extraer los datos que escojamos a partir de aqui el proceso es comun
+
+Despues de estudiarlo detenidamente creo dos funciones para ir eliminando de manera automatizada aquellos caracteres que no nos interesan
+
+```{r}
+#Defino una funcion para ir filtrando texto
+clean_text<-function(x){
+x<-gsub("(<[^>]*>)","",x)              #quitamos el codigo html de los links
+x<-gsub("(\n)","",x)                  # quitamos los saltos de linea \n
+x<-gsub("(.*&#x5d;)","",x)            #quitamos la primera parte del articulo, que son partes de codigo
+x<-gsub("(&#[0-9]*;)","",x)           #quitamos simbolos de puntuacion,superindices, .. en codigo html
+x<-gsub("\\([^)]*\\)","",x)           #Eliminamos los parentesis con su interior
+x<-gsub("\\[[0-9]*\\]","",x)          #Borramos los indices bibliograficos  
+x<-gsub("\\[editar\\]","",x)          #Quitamos el enlace para editar pagina nueva
+x<-gsub("\\.Véase tambiénE.*","",x)   #Eliminamos parte final, enlaces y bibliografia
+}
+```
+
+
+```{r}
+acentos_text<-function(x){
+#Quito todos los acento para tener menos dificultades con la nube de palabras
+#Cambio la ñ porque de problemas en la nube
+x<-gsub("á","a",x)
+x<-gsub("é","e",x)
+x<-gsub("í","i",x)
+x<-gsub("ó","o",x)
+x<-gsub("ú","u",x)
+x<-gsub("ñ","n",x)
+}
+```
+
+Y ahora aplico esa limpieza
+
+```{r}
+texto<-clean_text(text)
+texto<-acentos_text(texto)
+```
+
+Creamos el corpus y limpiamos
+
+```{r warning=FALSE}
+corpus<-Corpus(VectorSource(texto),readerControl = list(language="es"))
+#Paso a minusculas
+corpusclean<-tm_map(corpus,tolower)
+#Quitar numeros 
+corpusclean<-tm_map(corpusclean,removeNumbers)
+#quitar puntuacion
+corpusclean<-tm_map(corpusclean,removePunctuation)
+#quito los acentos de las stopwords porque los he quitado antes del texto
+stopwords_sinAcentos<-acentos_text(stopwords(kind = "es")) 
+#Quitar stopwords
+corpusclean<-tm_map(corpusclean,removeWords,stopwords_sinAcentos)
+#quito la preposicion tras. He descubierto que tiene una aparicion alta y no esta entre las stopwords
+corpusclean<-tm_map(corpusclean,removeWords,"tras") 
+#Espacios en blanco
+corpusclean<-tm_map(corpusclean,stripWhitespace)
+#Convertir en documento plano
+corpusclean<-tm_map(corpusclean,PlainTextDocument)
+```
+
+# Resultados y comparaciones {.smaller}
+
+Vamos a imprimir los primeros 5101 caracteres del texto extraido mediante la API
+
+```{r echo=FALSE}
+txtPrnt<-substring(text,1,5101)
+for (i in seq(1,5101,by=136)) {
+print(substring(txtPrnt,i,i+135))
+}
+```
+
+Y ahora los primeros 464 del texto limpiado antes de las transformaciones del corpus
+Hay que tener en cuenta que al principio del texto habia muchisimo codigo html con referencias y enlaces que se quito
+
+```{r echo=FALSE}
+txtPrnt<-substring(texto,1,464)
+for (i in seq(1,464,by=136)) {
+print(substring(txtPrnt,i,i+135))
+  }
+
+```
+
+Por ultimo los primeros 312 caracteres del corpus
+
+```{r echo=FALSE}
+txtPrnt<-substring(corpusclean$content$content,1,312)
+for (i in seq(1,312,by=136)) {
+print(substring(txtPrnt,i,i+135))
+}
+
+```
+
+# Analisis {.smaller}
+
+Hacemos una nube de palabras que es visualmente muy directa
+
+```{r}
+#Hacemos una nube de palabras
+set.seed(12345)
+wordcloud(corpusclean, min.freq = 15,random.order = FALSE,colors = brewer.pal(8,"Set2"))
+```
+
+Parece que aparte de `España` que parece evidente , tenemos `Guerra`, `Peninsula`, `Rey`, `Siglo`, `Gobierno`, `Imperio`, palabras que podemos asociar con el tema: `Hitoria de España`
+
+Pero vamos a ver los detalles 
+
+```{r collapse=TRUE}
+#Como solo tenemos un documento es mas amigable realizar 
+#un tdm para que las palabras aparezcan en filas
+tdm<-TermDocumentMatrix(corpusclean)
+t<-as.matrix(tdm)
+v<-sort(t[,1],decreasing = TRUE)
+d<-data.frame(word=names(v),freq=v)
+head(d,10)
+
+
+```
+
+Terminos mas frecuentes
+
+```{r collapse=TRUE}
+#encontramos los terminos con una frecuencia superior a 10
+findFreqTerms(tdm,10)
+```
+
+Graficamente
+
+```{r}
+#Creamos un grafico de barras
+barplot(d[1:15,]$freq, las = 2, names.arg = d[1:15,]$word,
+col ="blue", main ="Palabras mas frecuentes",
+ylab = "apariciones palabras",ylim = c(0,150))
+```
+
+Voy a escoger las primeras 75 palabras en orden de numero de apariciones y vamos a ver muy intuitivamente el peso relativo sobre el total de apariciones de todas las palabras
+
+Preparo los datos
+
+```{r}
+#Prepara los datos para unificar en suma las apariciones de palabras 
+#a partir de la 76º
+sect<-data.frame()
+sect<-d[1:75,]
+sect$word<-as.character(sect$word)
+filas<-rownames(sect)
+filas<-c(filas,"Resto_palabras")
+sect[76,1]<-"Resto_palabras"
+c<-d%>%slice(76:length(d[,2]))
+sect[76,2]<-c%>%summarize(sum(freq))
+rownames(sect)<-filas
+```
+
+Y genero el grafico
+
+```{r}
+#Y creo un grafico de sector
+sector <- ggplot(sect, aes(x = "",y=sect$freq, fill = sect$word)) +
+  geom_bar(stat="identity",width = 1)+labs(x="Palabras",y="Apariciones",fill="Palabras")
+sector + coord_polar(theta = "y",start = 1/2,direction = 1)
+```
+ 
+**Se puede apreciar que no tienen un peso excesivo sobre el total por lo que podemos deducir que esta muy repartido en general**
+
+
+
+
+# Otros analisis {.smaller}
+
+Vamos a buscar colaboradores y los escogeremos en funcion de su valia
+
+Para encontrar un criterio de valia, he tomado en cuenta su aportacion para articulos destacados
+
+### Que es un articulo destacado
+
+ Vemos la definicion de `Wikipedia`
+ 
+```{r echo=FALSE}
+knitr::include_graphics('data/Ejercicio/Articulos_Destacados.jpg')
+```
+
+ Y estos son los criterios para definirlo asi
+ 
+ 
+```{r echo= FALSE}
+knitr::include_graphics('data/Ejercicio/Criterios.jpg')
+```
+ 
+ Lo cual en mi opinion es un criterio muy valido para encontrar a los colaboradores mas valiosos
+
+
+# Busqueda enlaces {.smaller}
+
+Sobre la pagina de `Articulos Destacados` que hemos visto vamos a extraer los enlaces a las paginas *destacadas* en español
+
+Usamos funciones disponibles en `WikipediR`
+
+Extraemos los enlaces en dos pasadas de 500 (el maximo permitido). Una pasada ascendente y otra descendente
+
+```{r collapse=TRUE}
+#Cargamos los enlaces en dos tandas de 500 (el maximo permitido). Sobre un total de 1175
+enlaces<-page_links("es","wikipedia",page = "Wikipedia:Artículos destacados",limit = 500,direction = "ascending",namespaces = 0)
+enlaces2<-page_links("es","wikipedia",page = "Wikipedia:Artículos destacados",limit = 500,direction = "descending",namespaces = 0)
+
+#Vemos la estructura
+str(enlaces,4)
+
+
+```
+
+**Hay que destacar que como el limite es 500 existe en la API una forma de continuar la busqueda indicando el siguiente enlace pero no esta aplicado en el paquete y he sido incapaz de comprender como implementarlo**
+
+Por ejemplo para la primera lista `enlaces` (pasada ascendente)
+
+```{r collapse=TRUE}
+enlaces$continue$plcontinue
+```
+
+Y para la segunda lista `enlaces2` (pasada descendente)
+
+```{r collapse=TRUE}
+enlaces2$continue$plcontinue
+```
+
+Por lo que los enlaces a las paginas entre estas dos no los tenemos . No son muchos pero suponen una merma
+
+Tratamos los datos
+
+```{r}
+#Unimos todos los datos  y los almacenamos en un data frame
+copyenlaces1<-(enlaces$query$pages$`7215`$links)
+copyenlaces1<-c(copyenlaces1,enlaces2$query$pages$`7215`$links)
+```
+
+Creamos un dataframe con el enlace y su Namespace. Este es un codigo numerico que indica el tipo de pagina
+
+```{r echo= FALSE}
+knitr::include_graphics('data/Ejercicio/namespaces.jpg')
+```
+
+Solo nos interesa los de codigo `0`
+
+Creamos el daframe y lo ordenamos por `link`
+
+```{r}
+#En principio tenemos el numero de namespace y el nombre de la pagina del enlace
+copia<-data.frame(NameSpace=integer(),Link=character(),stringsAsFactors = FALSE)
+for (i in 1:1000) {
+  copia[i,1]<-copyenlaces1[[i]][["ns"]]
+  copia[i,2]<-as.character(copyenlaces1[[i]]$title)
+}
+#Ordenacion
+copia<-copia%>%arrange(Link)
+```
+
+
+Como algunos titulos no coinciden bien con el nombre de la pagina es mejor a traves de la funcion `page_info` extraer el id numerico de cada pagina y trabajar  con ellos
+
+```{r}
+numlink<-data.frame()
+for (i in 1:1000) {
+  linfo<-page_info("es","wikipedia",page = copia[i,2])
+  numlink[i,1]<-copia[i,2]
+  numlink[i,2]<-linfo$query$pages[[1]]$pageid
+}  
+```
+
+
+
+# Busqueda colaboradores {.smaller}
+
+Una vez que tenemos los datos de los enlaces que hemos ordenado en la diapositiva anterior vamos a buscar colaboradores.
+
+Para la busqueda de colaboradores vamos a usar funciones del paquete `WikipediaR`
+
+Aunque similar a `WikipediR` tiene ciertas diferencias.
+
+
+```{r message=FALSE,warning=FALSE,error=FALSE,collapse=TRUE}  
+
+contribList<-data.frame()
+error<-0
+#Por cada pagina de los Articulos destacados en castellano obtenemos 
+#la lista de los usuarios que han contribuido y las veces que los han hecho
+for (i in 1:1000) {
+  res<-try(contrb<-contribs(page = numlink[i,2],domain="es",rvprop = "userid"))
+  if (inherits(res,"try-error")){
+    error<-error+1
+    next
+  }
+  contribList<-rbind(contribList,contrb[["contribs"]])
+}
+
+error
+
+```
+
+
+Estos son los resultados. Sobre 1000 enlaces aprovechamos 990. 
+
+¿El problema?  Tenemos 10 errores   `Error : $ operator is invalid for atomic vectors`
+
+Tenemos paginas que no podemos acceder a sus colaboradores porque emplean caracteres de control que nos da error. 
+
+Ponemos el try para evitar problemas con el codigo
+
+
+El numero de contribuciones total recopiladas
+
+```{r collapse=TRUE}
+nrow(contribList)
+```
+
+
+  
+Agrupamos todos los colaboradores, ordenamos y calculamos frecuencia intervenciones en `Articulos Destacados` 
+
+Eliminamos todos los no identificados con `userID` 0
+  
+
+```{r collapse=TRUE,message=FALSE,warning=FALSE}
+##Ordenamos, colocamos y calculamos frecuencia intervenciones de 
+##todos los colaboradores. Quitamos todos los no identificados userID=0
+llist<-data.frame()
+for (h in 1:length(contribList)) {
+  p<-dim(contribList[h])
+  llist<-c(llist,as.character(contribList[h]$userid))
+}
+
+dlist<-as.data.frame(llist)
+ddlist<-dlist%>%gather(key,contrib)
+listado<-as.factor(ddlist[,2])
+listado<-ordered(listado)
+listado1<-table(listado)
+listado2<-as.data.frame(listado1)
+listado2<-listado2%>%arrange(desc(Freq))%>%filter(listado!="0")
+
+head(listado2,15)
+
+
+
+```
+
+Aqui vemos ordenados de manera decreciente por intervenciones en `Articulos Destacados` los maximos colaboradores
+
+# Busqueda especifica {.smaller}
+
+Voy a escoger 5 paginas de las que se encuentran en `Articulos Destacados` que son especificas en Historia e historia de España
+
+`Almanzor`   `Cristóbal Colón`    `Edad Media`    `Edad Moderna`    `Taifa de Zaragoza`
+
+```{r }
+pages<-c( "Almanzor","Cristóbal Colón","Edad Media","Edad Moderna","Taifa de Zaragoza")
+pag<-data.frame()
+for (pg in 1:5){
+  paf<-page_info("es","wikipedia",page =pages[pg])
+  pag[pg,1]<-paf$query$pages[[1]]$pageid
+  pag[pg,2]<-paf$query$pages[[1]]$title
+}
+```
+
+
+Realizamos las mismas operaciones para los colaboradores de estas paginas que los que hicimos con los de todos los  `Articulos destacados`  anteriormente
+
+```{r message=FALSE,warning=FALSE,collapse=TRUE}
+##Ordenamos, colocamos y calculamos frecuencia intervenciones de 
+##todos los colaboradores de estas 
+
+listhistoriat<-data.frame()
+for (pg in 1:5){
+  # En este caso obtenemos tambien el nombre de usuario
+  contrb3<-contribs(page = pag[pg,1],domain="es",rvprop = "user|userid")
+  listhistoria<-as.data.frame(contrb3[["contribs"]])
+  #mantengo este fichero como registro del nombre de cada id
+  listhistoriat<-rbind(listhistoriat,listhistoria)  
+}
+
+listhistoria1<-as.data.frame(listhistoriat$userid)
+listhistoria2<-as.factor(listhistoria1[,1])
+listhistoria3<-table(listhistoria2)
+listhistoria4<-as.data.frame(listhistoria3)
+listhistoria4<-listhistoria4%>%arrange(desc(Freq))%>%filter(listhistoria2!="0")
+
+head(listhistoria4,10)
+
+
+```
+
+Para encontrar un criterio sobre que colaborador escoger voy a dividir el numero de aportaciones a estas paginas relacionadas con la historia y con España y el total de aportaciones a `Articulos destacados`
+
+```{r collapse=TRUE}
+result<-listhistoria4
+for (i in 1:nrow(listhistoria4)) {
+  var<-as.character(listhistoria4[i,1])
+  vec<-as.factor(grepl(var,listado2$listado ))
+  result[i,3]<-0    #con caracter general
+  result[i,4]<-0
+  if (nlevels(vec)>1){
+    #nombres de contribuidores
+    aux<-grep(var,listado2$listado,value = TRUE,fixed = TRUE)  
+    #fila del numero de contribuciones
+    aux2<-grep(var,listado2$listado,value = FALSE,fixed = TRUE) 
+    for (j in 1:length(aux)) {
+      if (aux[j]==var) {
+        result[i,3]<-listado2[aux2[j],2]
+      }
+    }
+  }
+  if (result[i,3]>0) {    #evitar division por cero
+    result[i,4]<-result[i,2]/result[i,3]
+  }
+}
+colnames(result)<-c("Colaborador","paginas_Historia","paginas_destacadas","divisor")
+
+head(result,10)
+
+
+```
+
+Para seguir filtrando espero que sus aportaciones sean superiores a 10.
+
+Y ordeno por el divisor pensando en que un mayor divisor supone un mayor peso de aportaciones en historia y españa sobre el total
+
+```{r collapse=TRUE}
+result1<-result%>%arrange(desc(divisor))%>%filter(paginas_Historia>10)
+
+head(result1,10)
+
+
+```
+
+# Analisis colaborador {.smaller}
+
+Escojo al primero con ID 1089829 y miro sus aportaciones
+
+Lo busco en el data frame `listhistoriat`  que habia guardado antes y busco sus contribuciones
+
+```{r collapse=TRUE}
+
+indice_user<-grep("1089829",listhistoriat$userid,value = FALSE,fixed = TRUE)
+nombre_user<-as.character(listhistoriat$user[as.numeric(indice_user[1])])
+aportaciones<-userContribs(nombre_user,"es",ucprop="ids|title|comment|size|sizediff")
+intereses<-data.frame()
+intereses<-aportaciones$contribs
+#Cambiamos el tipo de sizediff(diferencia de tamaño de la aportacion) y ordenamos
+intereses$sizediff<-as.numeric(intereses$sizediff)
+intereses<-intereses%>%arrange(desc(sizediff))
+#Echo un vistazo
+ head(intereses[,1-3],10) 
+ 
+# Vemos aqui ordenados los intereses del usuario
+ interes<-as.factor(intereses$title)
+ levels(interes)
+ 
+#Escojo la revision con mas diferencia y busco 
+revision<-revision_content("es","wikipedia",revisions = "31166396") 
+texto<-as.character(revision$query$pages$`402328`$revisions[[1]]$`*`) 
+ 
+```
+
+Con el texto hago una ETL y mineria
+
+```{r}
+#Defino una funcion para ir filtrando texto
+clean2_text<-function(x){
+x<-gsub("(\\:|\\¿|\\?|\\|)"," ",x)              #quitamos los dos puntos
+x<-gsub("(\n)"," ",x)                  # quitamos los saltos de linea \n
+
+x<-gsub("(&#[0-9]*;)"," ",x)           #quitamos simbolos de puntuacion,superindices, .. en codigo html
+x<-gsub("\\([^)]*\\)"," ",x)           #Eliminamos los parentesis con su interior
+x<-gsub("\\[[0-9]*\\]"," ",x)          #Borramos los indices bibliograficos  
+x<-gsub("\\[[|]]\\]"," ",x)          #Quitamos los corchetes 
+}
+```
+
+```{r warning=FALSE}
+RevisionLimpia<-clean2_text(texto)
+RevisionLimpia<-acentos_text(RevisionLimpia)
+
+RevisaCorpus<-Corpus(VectorSource(RevisionLimpia),readerControl = list(language="es"))
+#Paso a minusculas
+CorpusLimpio<-tm_map(RevisaCorpus,tolower)
+#Quitar numeros 
+CorpusLimpio<-tm_map(CorpusLimpio,removeNumbers)
+#quitar puntuacion
+CorpusLimpio<-tm_map(CorpusLimpio,removePunctuation)
+#quito los acentos de las stopwords porque los he quitado antes del texto
+stopwords_sinAcentos<-acentos_text(stopwords(kind = "es")) 
+#Quitar stopwords
+CorpusLimpio<-tm_map(CorpusLimpio,removeWords,stopwords_sinAcentos)
+ 
+
+#Espacios en blanco
+CorpusLimpio<-tm_map(CorpusLimpio,stripWhitespace)
+#Convertir en documento plano
+CorpusLimpio<-tm_map(CorpusLimpio,PlainTextDocument)
+
+
+#Hacemos una nube de palabras
+set.seed(12345)
+wordcloud(CorpusLimpio, min.freq = 5,random.order = FALSE,colors = brewer.pal(8,"Set2"))
+```
+
+Vemos detalles y terminos mas frecuentes
+
+```{r collapse=TRUE}
+#Como solo tenemos un documento es mas amigable realizar 
+#un tdm para que las palabras aparezcan en filas
+tdm1<-TermDocumentMatrix(CorpusLimpio)
+t1<-as.matrix(tdm1)
+v1<-sort(t1[,1],decreasing = TRUE)
+d1<-data.frame(word=names(v1),freq=v1)
+head(d1,10)
+#encontramos los terminos con una frecuecia superior a 5
+findFreqTerms(tdm1,5)
+
+
+```
+
+
+

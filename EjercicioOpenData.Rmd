@@ -1,0 +1,806 @@
+---
+title: "Open Data"
+author: "Victor M. del Canto"
+date: "8 de Agosto de 2018`"
+output: 
+  html_document:
+    theme:       cosmo
+    highlight: pygments
+    toc:        true
+    toc_float:  true
+urlcolor: blue
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+library(kableExtra)
+knitr::opts_chunk$set(echo = TRUE,fig.width = 10,fig.height = 10,fig.align="center" )
+options(knitr.table.format = "html")
+
+```
+#          PLANTEAMIENTO   
+<br>
+</br>
+Voy a intentar profundizar en algunos aspectos de urbanismo. Mas concretamente intentar relacionar las obras de rehabilitacion y/ reformas con la antiguedad de los inmuebles.
+
+Para lo cual vamos a acceder a los datos abiertos del Ayuntamiento de Gijon , el cual elijo por cercania personal, y a los datos del Catastro.
+
+#    DATOS ABIERTOS  
+
+##    ORIGEN  
+<br>
+</br>
+
+* Para los datos del Ayto de Gijon: 
+    + la direccion es: <br></br>   http://transparencia.gijon.es/
+    + Y el catalogo de datos se encuentra en :  <br></br>   http://transparencia.gijon.es/page/1808-catalogo-de-datos
+    + El acceso es libre
+    + Tiene varios formatos disponibles ( GEORSS, KML, RSS, CSV, EXCEL, HTML, JSON, PDF, TXT, XHTML, XML, .....) pero no todos para todos los datos
+<br>
+</br>    
+
+* Para el Catastro:
+    + Para acceder al catastro hay que dirigirse a:  <br></br>   http://www.catastro.meh.es/
+    + Acceder a la Sede Electronica del Catastro:<br></br>    http://www.sedecatastro.gob.es/
+    + Para  acceder a los datos del catastro que requieren atentificacion es necesario obtener la `cl@ve` que sirve para varios accesos a la administracion publica, por ejemplo para el IRPF.
+    + Accedemos al epigrafe situado en *"Servicios que requieren autentificacion -> Servicios -> Descarga de datos y cartografia por municipio" .*<br></br> 
+    https://www.sedecatastro.gob.es/OVCFrames.aspx?TIPO=TIT&a=masiv
+    + Pinchar en *"Descarga de información alfanumérica (formato CAT)"*
+    + Dar el consentimiento cuando aparece una ventana con *"Doy mi consentimiento para que los datos personales que facilito puedan ser utilizados por la Dirección General del Catastro para actualización de la base de datos Catastral. El consentimiento es necesario para el tratamiento de los datos facilitados."*
+    + Pincharemos en `cl@ve` que nos redirige a la Agencia Tributaria para identificarnos
+      + Una vez autentificados accederemos a los datos del catastro .<br></br>  Seleccionamos Provincia *"ASTURIAS"* . Municipio: *"GIJON"* .<br></br>  Seleccionamos *"Urbano"* . Y pinchamos en *"Comprobar disponibilidad"*
+      + Aparece el archivo . Aceptamos las clausulas generales y tecnicas de la licencia
+      + Rellenamos los datos personales que nos piden y pinchamos en *"Descargar Producto"*.<br></br>  Es muy importante tener desactivado el bloqueo de elmentos emergentes o permitirlo si nuestro navegador nos lo indica
+
+
+
+
+##    ETL  
+
+Primero voy a cargar todas las librerias que me haran falta.<br></br>  En caso de no tener instalada alguna es necesario hacerlo 
+<br></br>
+```{r results='hide',message=FALSE,warning=FALSE}
+library(dplyr)
+library(ggplot2)
+library(leaflet)
+library(rgdal)
+#Funciones para los graficos
+give.n <- function(x,n){
+  return(c(y = mean(x)*1.5, label = length(x)))
+}
+give1.n <- function(x,n){
+  return(c(y = mean(x)*1.1, label = length(x)))
+}
+```
+
+###    AYUNTAMIENTO GIJON  
+
+ En el caso de los datos de licencias de obra del Ayuntamiento de Gijon hay que destacar la diferenciacion entre ciclo normal y ciclo rapido
+<br>
+</br>
+```{r echo=FALSE}
+knitr::include_graphics('ciclos.jpg')
+```
+<br></br>
+  
+  Hay una diferencia pero para este estudio rapido no podemos tenerla en cuenta por lo que asumimos esta merma de informacion y consideramos todas por igual
+ <br></br> 
+
+``` {r}
+
+#Cargo archivo licencias obra ciclo normal
+url<-"http://opendata.gijon.es/descargar.php?id=67&tipo=CSV"
+
+
+#Este es el historico de licencias de ciclo rapido
+url2="http://opendata.gijon.es/descargar.php?id=66&tipo=CSV"
+```
+<br></br>
+Cargamos los ficheros,los unimos en el mismo dataframe y vemos como son
+<br></br>
+``` {r collapse=TRUE}
+#Leemos ficheros
+obra1<-read.csv(url,header = TRUE,sep=",")
+obra2<-read.csv(url2,header = TRUE,sep=",")
+
+#Unimos las dos en el mismo dataframe
+obra<-rbind(obra1,obra2)
+
+#estructura
+str(obra)
+
+#estadistica
+summary(obra)
+
+```
+
+
+A destacar:
+<br>
+</br>
+
+* Tenemos el Nombre de la via, como el del Barrio , como el Titulo como Factores
+    + El periodo de registro de las licencias es de 18 años de 2000 a 2017
+    + El campo de Codigo Postal no es necesario, usare mejor el barrio para comparativas
+    + Los registros estan georreferenciados salvo unos pocos. Se puede aprovechar para realizar mapas
+    + Existen registro geograficos intercambiados, solo hay que ver los minimos y maximos de cada campo
+    + El campo Titulo es la union de los campos Direccion y Numero. No se usara
+<a name="Map">
+</a>
+Puesto que tenemos los registros identificados por barrios y georreferenciados aprovecho para descargar los datos de los barrios georrefernciados:
+
+Aqui podemos ver como estan generados los poligonos:<br></br> 
+https://observa.gijon.es/explore/dataset/barrios-urbanos/map/?flg=es&location=14,43.53327,-5.67028
+
+Aqui esta en diversos formatos para descargar el dataset:<br></br> 
+https://observa.gijon.es/explore/dataset/barrios-urbanos/export/?flg=es&location=14,43.53327,-5.67028
+
+Nos lo descargamos como shapefile
+<br></br>
+```{r results='hide',message=FALSE,warning=FALSE}
+#Esta es la descarga en shapefile
+url4="https://observa.gijon.es/explore/dataset/barrios-urbanos/download/?format=shp&timezone=Europe/Berlin"
+fichero  <- paste0(tempfile(), ".zip")
+download.file(url4, destfile = fichero)
+
+#LA DESCOMPRESION DE LOS FICHEROS ZIP LA REALIZO MANUALMENTE
+
+#Introducir el directorio 
+barriosMap<-readOGR(dsn="G:/personal/UNED/Master/Modulo/09/modulo9-opendata/Modulo9_OpenData/OpenData/OpenData/opendata Gijon/barrios-urbanos",layer="barrios-urbanos")
+barriosMap$barrio<-as.character(barriosMap$barrio)
+```
+<br></br>
+
+Vamos a limpiar y transformar los datos
+<a name="licencias">
+</a>
+<br></br>
+```{r}
+#Cambio los factores a caracter
+obra[,2]<-as.character(obra[,2])
+obra[,5]<-as.character(obra[,5])
+obra[,8]<-as.character(obra[,8])
+
+#Existen varios registros que tienen longitud y latitud intercambiados
+for (i in 1:length(obra[,1])){
+  if (is.na(obra[i,6])==FALSE){
+    if ((obra[i,6]<0)==TRUE){
+      latAux<-obra[i,7]
+      obra[i,7]<-obra[i,6]
+      obra[i,6]<-latAux
+    }
+  }
+}
+
+#Hago un poco de limpieza con el archivo
+obraclean<-obra
+for (i in 1:length(obra[,1])){
+  obraclean[i,2]<-gsub("\\([^)]*\\)","",obra[i,2])     #Elimino todo lo que hay entre parentesis
+  obraclean[i,2]<-gsub("\\(|\\)","",obra[i,2])     #Elimino si queda algun parentesis
+}
+```
+<br></br>
+
+ Tengo los datos preparados en el dataFrame `obraclean`
+ 
+ 
+###    CATASTRO  
+ 
+Una vez descargados los datos en un archivo `CAT` que es un fichero de texto con registros de 1000 caracteres.<br></br> 
+Tenemos que filtrarlos.<br></br> 
+El mismo Registro Catastral proporciona varios filtros mediante plantillas Excel en funcion de los datos que queramos acceder. <br></br> 
+http://www.catastro.minhap.es/ayuda/lang/castellano/Plantillas_CAT_Excel.zip <br></br> 
+Escogemos la plantilla adecuada. En nuestro caso la 11 y la 13. <br></br> 
+Hay que habilitar la conexion de datos externos. seleccionar el fichero `CAT`, y guardar el resultado con extension `CSV`
+
+
+El por que seleccionar esas plantillas viene explicado aqui
+<br>
+</br>
+```{r echo=FALSE}
+knitr::include_graphics('Registro.jpg')
+
+```
+<br></br>
+Estamos interesados en los registro tipo 11 donde vienen las parcelas con su referencia y su geolocalizacion. <br></br> 
+Queremos tambien los registros tipo 13 donde queda indicado el año de construccion y su exactitud por parcelas y Unidades Constructivas.<br></br> 
+En los registros tipo 14 quedan reflejados el año de reforma si lo hubiese y el año efectivo de cada inmueble a efectos del valor catastral para informacion fiscal.<br></br> 
+En los registros tipo 15 tenemos el año de antiguedad del bien inmueble.<br></br> 
+Me interesan los dos primeros tipos de registros, aunque para un estudio mas exhaustivo seria necesario tener en cuanta todos.<br></br> 
+Asi dicho estas definiciones pueden parecer confusas pero haciendo un ejercicio de simplicidad y salvando las distancias podemos explicarlo con un ejemplo sencillo.
+<br>
+</br>
+En una parcela puede haber varias unidades constructivas, llamense por ejemplo bloques de pisos o portales, por lo que en la misma parcela catastral se han construido varios bloques de pisos que pueden tener direcciones en diferentes calles. <br></br> 
+Cada uno de esos bloques tiene un numero determinado de pisos y locales que son inmuebles, por lo que tenemos una parcela con una georreferencia determinada (por sus centroides), donde se han construido uno o mas unidades constructivas en su momento (antiguedad). <br></br> 
+Cada una de esas unidades tiene uno o mas inmuebles que tienen en principio una antiguedad igual a la de la unidad constructiva pero que pueden haber sido modificada si ha existido una reforma integral. <br></br> 
+Y, aqui enlazamos con la informacion de licencias del Ayto., cuando se pide una licencia de obra, se indica la direccion de la unidad constructiva, por lo que se puede dar el caso de tener varias licencias en diferentes años para el mismo bloque sin que tengan que ser del mismo inmueble
+
+Aqui queda explicado 
+<br>
+</br>
+```{r echo=FALSE}
+knitr::include_graphics('Explicacion.jpg')
+
+```
+<br></br>
+Esta es la direccion donde está:<br></br> 
+http://www.catastro.minhap.es/documentos/preguntas_frecuentes_formato_CAT.pdf
+
+Como se puede comprobar la informacion a tratar es ingente y como requiere este modulo por duracion hay que simplificar. 
+
+Nos quedaremos con dos fuentes de datos:<br></br> 
+
+  * Una basada en los registros tipo 11 donde asociaremos a un codigo de parcela, unas coordenadas
+  * La otra basada en los registros tipo 13 donde a cada codigo de parcela se le asigna un año de construccion
+
+<br>
+</br>
+Vamos e empezar por descargar los datos de donde guardamos los archivos `CSV`
+<br> </br>
+```{r}
+dato11<-read.csv("Catastro/Resultados_CAT_tipo11_20071.csv",header=TRUE,sep = ";" )
+dato13<-read.csv("Catastro/Resultados_CAT_tipo13_20071.csv",header=TRUE,sep = ";" )
+```
+<br></br>
+Primero vamos a comprobar que todas las georreferencias se refieren a la UTM 30N
+<br></br>
+```{r collapse=TRUE}
+levels(dato11$X667_srs)
+```
+```{r echo=FALSE}
+knitr::include_graphics('UTM.jpg')
+```
+<br></br>
+Eliminamos esa columna a efectos de escogerla para el estudio puesto que todas las georreferencias pertenecen al mismo huso
+
+Tomamos como referencia comun el codigo de la parcela (X31_pc) ,añadimos las columnas necesarias y les ponemos nombre
+<br></br>
+```{r}
+datos1<-dato11%>%transmute(X31_pc,X159_tv,X164_nv,X189_pnp,X334_xcen,X343_ycen)
+datos2<-dato13%>%transmute(X31_pc,X45_cuc,X296_ac,X300_iacons)
+
+colnames(datos1)<-c("Codigo_Parcela","Tipo_Via","Nombre_Via","Numero","X_Centroide","Y_Centroide")
+colnames(datos2)<-c("Codigo_Parcela","Codigo UC","Año_Construccion","Exactitud")
+
+```
+<br></br>
+Vamos a limpiar y transformar los datos
+    
+Sobre el dataFrame de las georreferencias
+<br></br>
+```{r}
+#Eliminamos registros duplicados
+datos1_1<-datos1%>%distinct()
+#Cambio  los factores a caracter
+for (i in 1:3){
+  datos1_1[,i]<-as.character(datos1_1[,i])
+}
+#Eliminacion de registros vacios sin calle
+datos1_1<-datos1_1%>%filter(Tipo_Via!="")  
+#Poner dos decimales en las coordenadas. Viene en documentacion Catastro
+for (i in 1:length(datos1_1[,1])){
+  options(digits = 8)
+  datos1_1[i,5]<-datos1_1[i,5]/100
+  options(digits = 9)
+  datos1_1[i,6]<-datos1_1[i,6]/100
+}
+#En este dataframe nos quedamos solo con registros que contengan georreferencias
+datos1_2<-datos1_1%>%filter(is.na(X_Centroide)==FALSE)
+```
+<br></br>
+Sobre el dataFrame de las georreferencias
+<br></br>
+```{r}
+#Eliminamos los NA
+datos2_1<-datos2%>%filter(is.na(Año_Construccion)==FALSE)
+#Eliminamos los codigos que no corresponde a UC
+datos2_1<-datos2_1%>%filter(`Codigo UC`!="0000")             
+datos2_1<-datos2_1%>%filter(`Codigo UC`!="")
+#Eliminamos los no permitidos en Exactitud
+datos2_2<-datos2_1%>%filter(Exactitud=="E")
+datos2_2<-rbind(datos2_2,datos2_1%>%filter(Exactitud=="-"))
+datos2_2<-rbind(datos2_2,datos2_1%>%filter(Exactitud=="+"))
+datos2_2<-rbind(datos2_2,datos2_1%>%filter(Exactitud=="C"))
+#Quitamos los años puestos a 0 y nos quedamo solo con los construidos posteriormente a 1000
+datos2_2<-datos2_2%>%filter(Año_Construccion!=0)              
+datos2_2<-datos2_2%>%filter(Año_Construccion>1000)
+#Eliminamos columnas auxiliares que solo nos han servido para limpiar
+datos2_3<-datos2_2%>%select(Codigo_Parcela,Año_Construccion)
+#Eliminamos filas duplicadas
+datos2_3<-datos2_3%>%distinct()                               
+#Nos quedamos con el valor maximo del año de Construccion de cada parcela
+datos2_fin<-datos2_3%>%group_by(Codigo_Parcela)%>%filter(Año_Construccion==min(Año_Construccion))%>%arrange(Codigo_Parcela,desc(Año_Construccion))
+datos2_fin<-as.data.frame(datos2_fin)
+datos2_fin[,1]<-as.character(datos2_fin[,1])
+```
+
+
+
+#    CONEXION ENTRE FUENTES  
+
+##    GEORREFERENCIAS  
+<br></br>
+Vamos a intentar crear un nuevo dataFrame donde tengamos las licencias asociadas con un numero de parcela.<br></br> 
+Eso luego nos permitira calcular las coordenadas de aquellos registros que no tienen y asociar el año de construccion con el de reforma
+<a nombre="geo">
+</a>
+<br></br>
+```{r}
+#Buscamos por patrones y creamos una nueva columna
+for (i in 1:length(obraclean[,1])){
+  calle<-paste0("^",obraclean[i,2],"$")
+  numero<-paste0("^",obraclean[i,3],"$")
+  nc=grep(calle,datos1_2$Nombre_Via)
+  nn=grep(numero,datos1_2[nc,4])
+  if(length(nn)==1){
+    obraclean[i,9]<-datos1_2[nc[nn],1]
+  }
+}
+#Añadimos el nombre de la columna
+  colum<-colnames(obraclean)
+  colum[9]<-"Parcela"
+  colnames(obraclean)<-colum
+```  
+<br></br>
+Separamos en dos dataFrame segun este o no la geolocalizacion
+<br></br>
+```{r}
+obrasNO<-obraclean%>%filter(is.na(LATITUD)==TRUE)
+obrasSi<-obraclean%>%filter(is.na(LATITUD)==FALSE)
+```
+<br></br>
+Transformacion de geocoordenadas de ETRS89 (Catastro) a WGS84 (Ayto.)
+<br></br>
+```{r}
+datos1LAT<-datos1_2
+coordinates(datos1LAT)<-c("X_Centroide","Y_Centroide")
+proj4string(datos1LAT)<-CRS("+proj=utm +zone=30 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs")
+datos1LAT1<-spTransform(datos1LAT,CRS("+init=epsg:4326"))
+datos1LAT1<-as.data.frame(datos1LAT1)
+
+```
+<br></br>
+En el dataframe que no tenemos geolocalizacion pero si identificada la parcela añadimos dicha geolocalizacion desde el dataFrame transformado desde el Catastro
+<br></br>
+```{r}
+obrasNO1<-obrasNO%>%filter(is.na(Parcela)==FALSE)
+for (i in 1:length(obrasNO1[,1])){
+p=grep(obrasNO1[i,9],datos1LAT1$Codigo_Parcela)
+  obrasNO1[i,6]<-datos1LAT1[p,6]
+  obrasNO1[i,7]<-datos1LAT1[p,5]
+}
+```
+<br></br>
+Y añadimos esos datos al dataFrame que ya tenia geolocalizacion, actualizando
+<br></br>
+```{r}
+obrasSi<-rbind(obrasSi,obrasNO1)
+obrasNO<-obrasNO%>%filter(is.na(Parcela)==TRUE)
+```
+<br></br>
+Vamos a ver como quedan los datos
+
+EL numero de observaciones con geolocalizacion son `r nrow(obrasSi)` 
+<br></br>
+El numero de observaciones sin geolocalizacion son `r nrow(obrasNO)`
+<br></br>
+La proporcion es de un `r ceiling(((nrow(obrasNO)/nrow(obrasSi))*100))` %
+<br></br>
+Por necesidades temporales prescindimos de ellas
+
+Podriamos hacer una mayor limpieza en los nombres de calles, eliminando palabras comunes como "LA","DE","EL".. y signos de puntuacion pero requiere un tiempo del que no dispongo por lo ajustado del modulo
+
+Vamos a comparar la geolocalizacion del Catastro y del Ayto.
+En dos columnas auxiliares ponemos los datos XY del Catastro para comparar
+<br></br>
+```{r}
+for (i in 1:length(obrasSi[,1])){
+  if (is.na(obrasSi[i,9])==FALSE){
+    ncoinc=grep(obrasSi[i,9],datos1LAT1$Codigo_Parcela)
+    if(length(ncoinc)>0){
+      for (t in 1:length(ncoinc)){
+        obrasSi[i,10]<-datos1LAT1[ncoinc[t],6]
+        obrasSi[i,11]<-datos1LAT1[ncoinc[t],5]
+        options(digits = 8)
+        obrasSi[i,12]<-abs(obrasSi[i,6]-obrasSi[i,10])
+        obrasSi[i,13]<-abs(obrasSi[i,7]-obrasSi[i,11])
+      }
+    }
+  }
+}
+#Añadimos el nombre de las columnas
+colum<-colnames(obrasSi)
+colum[10]<-"Latitud Catastral"
+colum[11]<-"Longitud Catastral"
+colum[12]<-"Error Latitud"
+colum[13]<-"Error Longitud"
+colnames(obrasSi)<-colum
+```
+<br></br>
+Hemos calculado el margen de error entre los geodatos de diferentes fuentes en dos columnas auxiliares. Vemos sus valores estadisticos
+<br></br>
+```{r }
+options(digits = 12)
+summary(obrasSi[,12:13])
+```
+<br></br>
+La equivalencia en metros respecto a los grados es 0,0001º=11,132 metros <br></br> 
+La media del error en latitud 0,00008006º equivale a unos 9 metros<br></br> 
+La media del error en longitud 0,00012269º equivale a unos 14 metros<br></br> 
+Estos errores pequeños son facilmente explicables porque la georreferencia del Catastro se refiere al centroide de la parcela que puede contener varias bloques con distintas direcciones que tendran distintas georreferencias segun el Ayto.<br></br> 
+Los errores de los valores superiores van desde los 550 hasta los 1750 metros, lo cual es excesivo<br></br> 
+He buscado fisicamenten en el mapa por coordenadas aquellas georreferencias donde mas discrepancias habia y curiosamente los errores se encuentran en los datos catastrales, por lo que prescidire de ellos donde pueda
+<a name="geo">   
+</a>
+<br></br>
+```{r}
+#Eliminamos columnas innecesarias
+obrafin1<-obrasSi[,1:9]
+```
+<br></br>
+
+##   ANTIGUEDAD  
+
+
+Para analizar la diferencias en tiempo sobre la antiguedad de las parcelas y ver las influencias sobre los barrios preparamos los datos en consonancia con la informacion del Catastro guardada en el 2º dataFrame
+
+Preparo el dataframe. 
+<a name="temp">
+</a>
+<br></br>
+```{r}
+#Añado una columna nueva de nombre `Año` y la pongo a 0
+obratemp<-obraclean
+colum<-colnames(obratemp)
+colum[10]<-"Año"
+obratemp[,10]<-0
+colnames(obratemp)<-colum
+
+#Eliminamos los registros que no tenemos asociados a Parcela
+obratemp<-obratemp%>%filter(is.na(Parcela)==FALSE)
+
+#Asociamos los registros del Ayto. con los del Catastro
+for (i in 1:length(obratemp[,1])){
+  tp<-grep(obratemp[i,9],datos2_fin$Codigo_Parcela)
+  if (length(tp)>0){
+    obratemp[i,10]<-datos2_fin[tp,2]
+  }
+  
+}
+ #Quitamos registros sin año antiguedad
+obratemp<-obratemp%>%filter(Año!=0)      
+```
+<br></br>
+Este es uno de los dataFrames que usaremo graficamente
+
+#   ANALISIS 
+
+Para el analisis y los mapas tenemos generados tres dataframe diferentes. 
+
+El conjunto de licencias esta en `obraclean` que generamos aqui [licencias](#licencias)
+
+De este deriva `obratemp` donde se han quitado las licencias sin parcela del catastro asociada con la fecha de antiguedad . Lo creamos aqui [temp](#temp)
+
+Para la geolocalizacion tenemos `obrafin1` que se creo aqui [geo](#geo)
+
+
+##   GRAFICOS  
+
+###   EVOLUCION Y RELACION CON LA POBLACION  
+
+Empezamos por ver una evolucion de las licencias
+<br></br>
+```{r}
+evol<-ggplot()
+evol<-evol+geom_bar(data=obraclean,aes(x=obraclean$AÑO),fill="lightblue")+labs(x="AÑO",y="CANTIDAD",title="EVOLUCION GLOBAL DE LICENCIAS CONCEDIDAS")
+evol<-evol+theme(title = element_text(color="blue",size=12,lineheight = 1),axis.text = element_text(color="red",size=8,lineheight = 1))
+evol
+```
+<br></br>
+En principio no nos dice nada. 
+<br>
+</br>
+Vamos a ver el conjunto de licencias totales en el periodo separadas por barrios
+<br></br>
+```{r}
+barrio<-ggplot(obraclean,aes(x=obraclean$BARRIO))
+barrio<-barrio+geom_bar(stat = "count")+labs(x="BARRIO",y="CANTIDAD",title="LICENCIAS OBTENIDAS POR BARRIOS")
+barrio<-barrio+theme(axis.text.x = element_text(angle = 90,hjust=1,vjust=0.5),title = element_text(color="blue",size=12,lineheight = 1))
+barrio
+```
+<br></br>
+Podemos ver que por barrios los mas populosos son tambien los que mas licencias requieren pero sin que haya una relacion directa puesto que entran en juego otros factores como la antiguedad de los inmuebles, la actividad comercial,...
+<br>
+</br>
+A grandes rasgos los barrio mas poblados son en orden (en 2015) . Sobre un total de 275000:
+
+Barrio      | Poblacion aproximada   |   Proporcion Total
+------------|-------------------------|-------------------
+El LLano    |               40000     |             14.54%           
+Centro      |               33000     |             12.00%
+La Calzada  |               25000     |              9.09%
+La Arena    |               17000     |              6.18%
+Pumarin     |               17000     |              6.18%
+Natahoyo    |               15000     |              5.45%
+Laviada     |               12000     |              4.36%
+El Coto     |               10000     |              3.63%
+El Poligono |               10000     |              3.63%
+
+Ni el orden ni la proporcion se corresponden con las licencias que hemos visto en el grafico anterior
+
+Estos son los datos
+<br></br>
+```{r}
+barr<-obraclean%>%group_by(BARRIO)%>%filter(n()>1400)%>%summarize(cuenta=n())%>%arrange(desc(cuenta))
+options(digits=3)
+barr[,3]<-barr[,2]/nrow(obraclean)*100
+colnames(barr)<-c("Barrio","Total licencias","Proporcion %")
+barr%>%kable("html")%>%kable_styling(bootstrap_options=c("bordered","hover","condensed","active"),font_size=14)
+```
+<br></br>
+Podemos concluir en primer lugar que no existe una relacion directa entre el tamaño poblacional y el numero de licencias de obra
+
+###   ANTIGUEDAD DE  LOS EDIFICIOS  
+<br>
+</br>
+<center> <h4><u> VISION GENERAL </u></h4> </center>   
+<br>
+</br>
+Vamos a ver primero unos datos basicos
+<br></br>
+```{r collapse=TRUE}
+options(digits=4)
+#Antiguedad para parcelas con licencias
+summary(obratemp$Año)
+
+#Antiguedad general 
+summary(datos2_fin$Año_Construccion)        
+```
+<br></br>
+Vamos a plasmar ambos de manera conjunta
+<br></br>
+```{r message=FALSE,warning=FALSE}
+gen1<-ggplot()
+gen1<-gen1+geom_histogram(data=obratemp,aes(x=obratemp$Año))+stat_bin(binwidth = 5)+labs(x="AÑOS",y="CANTIDAD",title="AÑO CONSTRUCCION INMUEBLES")
+gen1<-gen1+geom_freqpoly(data=datos2_fin,aes(x=datos2_fin$Año_Construccion))+scale_x_continuous(breaks = pretty(datos2_fin$Año_Construccion,n=15))
+gen1<-gen1+theme(title = element_text(color="blue",size=12,lineheight = 1),axis.text = element_text(color="blue",size=8,lineheight = 1))
+gen1
+```
+<br></br>
+Parece en ambos casos que tenemos una distribucion con cierta parecido a la Normal pero con una asimetria muy acusada a la izquierda
+
+Para observar mejor las distribuciones voy a limitar el valor maximo de antiguedad a 158 años, desde 1860.
+<br></br>
+```{r message=FALSE,warning=FALSE}
+obratemp1<-obratemp%>%filter(Año>1860)
+datos2_fin1<-datos2_fin%>%filter(Año_Construccion>1860)
+gen2<-ggplot()
+gen2<-gen2+geom_histogram(data=obratemp1,aes(x=obratemp1$Año))+stat_bin(binwidth = 5)+labs(x="AÑOS",y="CANTIDAD",title="AÑO CONSTRUCCION INMUEBLES",subtitle="DESDE 1860")
+gen2<-gen2+geom_freqpoly(data=datos2_fin1,aes(x=datos2_fin1$Año_Construccion))+scale_x_continuous(breaks = pretty(datos2_fin1$Año_Construccion,n=15))
+gen2<-gen2+theme(title = element_text(color="blue",size=12,lineheight = 1),axis.text = element_text(color="blue",size=8,lineheight = 1))
+gen2
+```
+<br></br>
+Se puede apreciar en la distribucion de frecuencias de los inmuebles construidos que existe una distribucion con picos de crecimiento entre 1960 y 1970 (aproximadamente)<br></br> 
+Otros se situan en torno a 1980 y 1990 y uno mas prolongado entre 2000 y 2008
+
+Por otra parte y como se puede suponer solo hay equivalencia entre las licencias concedidas
+para los crecimientos situados entre los 60 y los 80.<br></br>  
+Para los dientes de sierra posteriores se puede pensar que aun es pronto para reformas y rehabilitaciones en terminos constructivos
+<br>
+</br>
+<center> <h4><u> LICENCIAS Y BARRIOS </u></h4> </center>    
+<br>
+</br>
+Por años de concesion de licencias. Se observa un crecimiento continuado con ciertos altibajos, previsible. Por encima de cada columna el numero de casos 
+<br></br>
+```{r message=FALSE,warning=FALSE}
+evol1<-ggplot(obratemp,aes(x=obratemp$AÑO,y=abs(obratemp$Año-obratemp$AÑO)))
+evol1<-evol1+geom_bar(stat="summary",fun.y="mean",fill="royalblue")+labs(x="AÑOS",y="ANTIGUEDAD MEDIA",title="EVOLUCION DE LA ANTIGUEDAD DE LOS INMUEBLES EN LA CONCESION DE LICENCIAS")
+evol1<-evol1+theme(title = element_text(color="blue",size=12,lineheight = 1),axis.text = element_text(color="red",size=8,lineheight = 1))
+evol1<-evol1+stat_summary(fun.data = give1.n, geom = "text", fun.y = mean)
+evol1
+```
+<br></br>
+Antiguedad media de licencias. Evolucion por barrios. Por encima de cada columna el numero de casos 
+<br></br>
+```{r message=FALSE,warning=FALSE}
+barrio1<-ggplot(obratemp,aes(x=obratemp$BARRIO,y=abs(obratemp$Año-obratemp$AÑO)))
+barrio1<-barrio1+geom_bar(stat="summary",fun.y="mean",fill="blue",position="dodge")+labs(x="BARRIO",y="ANTIGUEDAD MEDIA",title="MEDIA ANTIGUEDAD INMUEBLES CON LICENCIAS.EVOLUCION POR BARRIOS")
+barrio1<-barrio1+theme(axis.text = element_text(color="red",size=8,lineheight = 1,angle = 90,hjust=1,vjust=0.5),title = element_text(color="blue",size=12,lineheight = 1))
+barrio1<-barrio1+stat_summary(fun.data = give.n, geom = "text", fun.y = mean)
+barrio1
+```
+<br></br>
+Un boxplot por barrios. Por encima de cada columna el numero de casos 
+<br></br>
+```{r message=FALSE,warning=FALSE}
+barrio2<-ggplot(obratemp,aes(x=obratemp$BARRIO,y=abs(obratemp$Año-obratemp$AÑO)))
+barrio2<-barrio2+geom_boxplot(varwidth = FALSE,fill="lightblue")+labs(x="BARRIO",y="ANTIGUEDAD MEDIA",title="ANTIGUEDAD INMUEBLES CON LICENCIAS.EVOLUCION POR BARRIOS")
+barrio2<-barrio2+theme(axis.text = element_text(angle = 90,hjust=1,vjust=0.5),title = element_text(color="blue",size=12,lineheight = 1))
+barrio2<-barrio2+stat_summary(fun.data = give.n, geom = "text", fun.y = mean)
+barrio2
+```
+<br>
+</br>
+
+Escojo los barrios mas populosos. <br></br>
+Evolucion del numero de licencias por años y por barrios<br></br>
+Una vision conjunta
+<br></br>
+```{r message=FALSE,warning=FALSE}
+obracleanbar<-obraclean%>%group_by(BARRIO)
+obracleanbar<-obracleanbar%>%filter(n()>1400)
+evol3<-ggplot(obracleanbar,aes(x=AÑO,fill=BARRIO))
+evol3<-evol3+geom_bar()+labs(x="AÑOS",y="CANTIDAD",title="ANTIGUEDAD DE INMUEBLES EN LICENCIAS CONCEDIDAS")
+evol3<-evol3+facet_wrap(~BARRIO)
+evol3<-evol3+theme(legend.title =element_text(face="bold",size = 10),legend.text = element_text(color="darkgreen",size=8,lineheight = 1),title = element_text(color="blue",size=12,lineheight = 1),axis.text = element_text(color="red",size=8,lineheight = 1))
+evol3
+```
+
+###  ESTUDIOS DE LA ZONA CENTRO Y EL LLANO
+
+Hemos visto que el mayor numero de licencias se conceden en la zona `Centro`<br></br> 
+Vamos a compararlo con otro barrio que considero mas representativo `El Llano`<br></br> ¿Por que? Porque se asemeja en su evolucion de las licencias al total de la ciudad
+
+Aqui lo vemos
+<br></br>
+```{r message=FALSE,warning=FALSE}
+ObracleanLlano<-obraclean%>%filter(BARRIO=="El Llano")
+evol4<-ggplot()
+evol4<-evol4+geom_bar(data=ObracleanLlano,aes(x=ObracleanLlano$AÑO),fill="#CC3300")+labs(x="AÑO",y="CANTIDAD",title="EVOLUCION GLOBAL DE LICENCIAS CONCEDIDAS EN EL LLANO")
+evol4<-evol4+theme(title = element_text(color="blue",size=12,lineheight = 1),axis.text = element_text(color="red",size=8,lineheight = 1))
+evol4
+```
+<br></br>
+En comparacion con el global
+<br></br>
+```{r message=FALSE,warning=FALSE}
+evol
+```
+<br></br>
+Y ahora para apreciarse juntos distorsiono los datos del barrio multiplicandolos por 7 para apreciar mejor el parecido
+<br></br>
+```{r message=FALSE,warning=FALSE}
+ObracleanLlano1<-ObracleanLlano
+for (i in 1:6){
+  ObracleanLlano1<-rbind(ObracleanLlano1,ObracleanLlano)
+}
+evol5<-evol+geom_bar(data=ObracleanLlano1,aes(x=ObracleanLlano1$AÑO),fill="#CC3300",position="dodge")
+evol5
+
+```
+<br></br>
+Vamos a ver graficamente algunas cuestiones de ambos conjuntamente
+<br>
+</br>
+Un histograma por antiguedad
+<br></br>
+```{r message=FALSE,warning=FALSE}
+obracent<-obratemp%>%filter(BARRIO=="Centro" |BARRIO=="El Llano")
+centro2<-ggplot(obracent,aes(x=obracent$Año,fill=obracent$BARRIO))
+centro2<-centro2+geom_histogram()+labs(x="AÑOS",y="CANTIDAD",title="ANTIGUEDAD DE INMUEBLES EN ZONA CENTRO",fill="Barrios")+scale_x_continuous(breaks = pretty(obracent$Año,n=20))
+centro2<-centro2+theme(title = element_text(color="blue",size=12,lineheight = 1),axis.text = element_text(color="red",size=8,lineheight = 1),legend.text = element_text(color="red",size=8,lineheight = 1))
+centro2
+```
+<br></br>
+Se puede apreciar que `El Llano`surge a mediados de la decada de los 50 del siglo XX, va aumentando la cantidad de edificios de manera creciente hasta finales de los 70 cuando se detiene la progresion y a partir de entonces sigue una linea igual que el `Centro` y el resto de la ciudad
+<br>
+</br>
+Evolucion de antiguedad de los inmuebles en las licencias por años
+<br></br>
+```{r message=FALSE,warning=FALSE}
+centro1<-ggplot(obracent,aes(x=obracent$AÑO,y=abs(obracent$Año-obracent$AÑO),fill=obracent$BARRIO))
+centro1<-centro1+geom_bar(stat="summary",fun.y="mean",position="dodge")+labs(x="AÑOS",y="ANTIGUEDAD MEDIA",title="EVOLUCION DE LA ANTIGUEDAD DE LOS INMUEBLES EN LA CONCESION DE LICENCIAS",subtitle="ZONA CENTRO y EL LLANO", fill="Barrios")
+centro1<-centro1+theme(title = element_text(color="blue",size=12,lineheight = 1),axis.text = element_text(color="red",size=8,lineheight = 1),legend.text = element_text(color="red",size=8,lineheight = 1))
+centro1
+```
+<br></br>
+Podria deducirse que la brecha de antiguedad que tiene el `Centro` respecto al `El Llano` se va reduciendo progresivamente a medida que pasan los años salvo el año 2015 que vuelve a crecer
+<br>
+</br>
+Evolucion de licencias por años en la zona `Centro` y `El Llano`
+<br></br>
+```{r message=FALSE,warning=FALSE}
+obracent1<-obraclean%>%filter(BARRIO=="Centro" |BARRIO=="El Llano")
+centro3<-ggplot()
+centro3<-centro3+geom_bar(data=obracent1,aes(x=obracent1$AÑO,fill=obracent1$BARRIO),position="dodge")+labs(x="AÑOS",y="NUMERO LICENCIAS",title="EVOLUCION DE LICENCIAS ZONA CENTRO Y EL LLANO",fill="BARRIOS")
+centro3<-centro3+theme(title = element_text(color="blue",size=12,lineheight = 1),axis.text = element_text(color="red",size=8,lineheight = 1),legend.text = element_text(color="red",size=8,lineheight = 1))
+centro3
+```
+<br></br>
+Parecen seguir una tonica similar
+
+
+##   MAPAS  
+
+Para la realizacion de los mapas tenemos disponible a traves del Catastro de la misma manera que nos descargamos el archivo `CAT` un archivo `Shapefile` de cartografia vectorial desde esta misma pagina
+https://www.sedecatastro.gob.es/OVCFrames.aspx?TIPO=TIT&a=masiv
+
+La forma de descargarlo es la misma. Pero por cuestion de tiempo y cierto desconocimiento por mi parte del manejo de estos ,voy a usar el paquete `Leaflet` que tiene una mayor sencillez, al menos aparentemente
+
+Hemos descargado del Ayto. un dataset con los poligonos de los barrios que nombre `BarriosMap`. Lo hicimos aqui [Map](#Map) 
+
+Y tenemos preparado el dataFrame `obrafin1` con las georreferencias de las licencias que hicimos aqui [geo](#geo)
+<br>
+</br>
+Preparacion de los datos y la paleta de colores
+<br></br>
+```{r}
+#Preparacion de datos para mapas sobre barrios
+obrafin2<-obrafin1%>%filter(BARRIO=="El Llano")
+obratemp3<-obratemp%>%filter(BARRIO=="El Llano")
+obrafin3<-obrafin1%>%filter(BARRIO=="El Polígono"|BARRIO=="Laviada")
+obratemp2<-obratemp%>%filter(BARRIO=="El Polígono"|BARRIO=="Laviada")
+#Paletas de colores
+pal <- colorQuantile(palette = "Blues", domain = (1690/obratemp$Año),n=8)
+pal2 <- colorQuantile(palette = "Blues", domain = (1924/obratemp2$Año),n=8)
+pal3 <- colorQuantile(palette = "Blues", domain = (1891/obratemp3$Año),n=8)
+
+```
+<br>
+</br>
+
+Vamos a ver este mapa introductorio
+
+En el podemos apreciar la division en barrios y clusterizados interactivamente el numero de licencias
+<br></br>
+```{r}
+#Mapa1
+Gijon8<-leaflet(barriosMap)%>%addTiles()%>%addCircleMarkers(obrafin1$LONGITUD,obrafin1$LATITUD,radius=1,fillOpacity = 0.4,clusterOptions = markerClusterOptions())%>%addPolygons(color = "#444444", weight = 1, smoothFactor = 0.5,opacity = 0.5, fillOpacity = 0.3,popup=barriosMap$barrio,highlightOptions = highlightOptions(color = "black", weight = 2,bringToFront = TRUE,sendToBack = TRUE))%>%setView(-5.663604,43.530834,zoom = 12)
+Gijon8
+```
+<br>
+</br>
+<br>
+</br>
+En este mapa vemos la antiguedad de los edificios
+
+En circulos de color azul vemos la antiguedad (cuanto mas oscuro, mas antiguo) 
+<br></br>
+```{r message=FALSE,warning=FALSE}
+#Este es de antiguedad
+Gijon9<-leaflet(barriosMap)%>%addTiles()%>%addCircleMarkers(obratemp$LONGITUD,obratemp$LATITUD,color=pal(1690/obratemp$Año),radius=4,fillOpacity =0.5)%>%addPolygons(color = "#444444", weight = 1, smoothFactor = 0.5,opacity = 0.3, fillOpacity = 0.1,popup=barriosMap$barrio,highlightOptions = highlightOptions(color = "black", weight = 2,bringToFront = TRUE,sendToBack = TRUE))%>%setView(-5.663604,43.530834,zoom = 14)
+Gijon9
+```
+<br>
+</br>
+<br>
+</br>
+Una vision del barrio de `El Llano` que vimos en graficos
+<br></br>
+```{r message=FALSE,warning=FALSE}
+#En el LLano
+Gijon7<-leaflet(barriosMap)%>%addTiles()%>%addCircleMarkers(obratemp3$LONGITUD,obratemp3$LATITUD,color=pal3(1891/obratemp3$Año),radius=4,fillOpacity =0.5)%>%addPolygons(color = "#444444", weight = 1, smoothFactor = 0.5,opacity = 0.3, fillOpacity = 0.1,popup=barriosMap$barrio,highlightOptions = highlightOptions(color = "black", weight = 2,bringToFront = TRUE,sendToBack = TRUE))%>%addCircleMarkers(obrafin2$LONGITUD,obrafin2$LATITUD,clusterOptions = markerClusterOptions())%>%setView(-5.667037,43.529029,zoom = 16)
+Gijon7
+```
+<br></br>
+Puede apreciarse que los edificios mas antiguos se concentran mas al norte pegando a la zona `Centro`, y el numero de licencias tambien es mayor en ese sentido, pero si hacemos un nivel mas de zoom vemos que hay dos cluster una de 552 mas hacia el suroeste y otro de 504 mas al norte de un tamaño parecido pero con una antiguedad completamente diferente
+<br>
+</br>
+<br>
+</br>
+A partir de este mapa vamos a centrarnos en dos barrios contrapuestos : `El Poligono` y `Laviada`.
+
+Son barrios que estan juntos ,tienen un tamaño parecido y poblacionalmente son parecidos .
+
+Cambia la topologia urbana.
+
+`Laviada` es mas parecido a un barrio residencial adosado al centro de la ciudad. `El Poligono` se compone sobre todo de torreones muy altos aislados con grandes calles ajardinadas
+<br></br>
+```{r message=FALSE,warning=FALSE}
+#El poligono y Laviada
+Gijon10<-leaflet(barriosMap)%>%addTiles()%>%addCircleMarkers(obratemp2$LONGITUD,obratemp2$LATITUD,color=pal2(1924/obratemp2$Año),radius=4,fillOpacity =0.5)%>%addPolygons(color = "#444444", weight = 1, smoothFactor = 0.5,opacity = 0.5, fillOpacity = 0.3,popup=barriosMap$barrio,highlightOptions = highlightOptions(color = "black", weight = 2,bringToFront = TRUE,sendToBack = TRUE))%>%addMarkers(obrafin3$LONGITUD,obrafin3$LATITUD,clusterOptions = markerClusterOptions())%>%setView(-5.672916,43.535314,zoom = 16)
+Gijon10
+
+```
+<br></br>
+A primera vista se ve una desproporcion entre la antiguedad de uno y el de otro la cual se hace evidente en `Laviada` junto a la zona `Centro` y en el entorno de dos avenidas que la recorren de nordeste a suroeste en el extremo oriental.
+
+El numero de licencias tambien esta desproporcionado, pero hay que tener en cuenta la actividad comercial que es muy intensa en la zona mas cercana al `Centro`<br></br>
+Y sin embargo es bastante escasa en `El Polígono`
+
+<br>
+</br>
+
+Para un analisis mas detallado quizas tenemos que tomar datos de locales comerciales, analizar mas detalladamente todos los inmueble del `Catastro`, revisar las antiguedades teniendo en cuenta las sucesivas reformas,...
