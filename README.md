@@ -6,3 +6,4 @@ Master Big Data &amp; Business Analitycs. Differents modules exercises
  + Evaluacion2.pdf corresponde a un analisis del impacto del Big Data en una empresa, en este caso el gigante del retail en UK Tesco correspondiente al modulo "Aplicaciones de negocio en la empresa"
  + EjercicioRedesSociales.rmd es el ejercicio del modulo "Redes Sociales" y realiza un acceso a Wikipedia
  + EjercicioOpenData.rmd a partir de los datos abiertos del Catastro y el Ayuntamiento de Gijon se realiza un analisis de las obras de reforma realizadas en inmuebles en dicha ciudad asociadas a su antiguedad. Corresponde al modulo "Open Data"
+ + Ejercicio1 es la carpeta que corresponde al modulo "Visualizacion Avanzada", realizado un estudi interactivo en Shiny con dqatos de los vehiculos del Reino Unido de 2016
